@@ -158,7 +158,7 @@ async function setReading(req: Request): Promise<Response> {
   const discuss = body.discussed ?? null;
   if (!Number.isInteger(courseId) || typeof url !== "string" || !url) return refuse("Missing course or reading.");
   if (discuss !== null && (typeof discuss !== "boolean" || day !== null)) {
-    return refuse("Send either a date or discussed, not both.");
+    return refuse("Can't set a date and hide a reading at the same time.");
   }
   if (day !== null) {
     if (

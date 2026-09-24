@@ -221,7 +221,7 @@ function renderDue() {
   container.innerHTML = `
     <p class="sub due-summary">
       ${items.length} items due in the next ${DATA.days} days ·
-      <b>${notSubmitted}</b> not yet submitted · click an item for details
+      <b>${notSubmitted}</b> not yet submitted
     </p>
     ${Object.values(byDay).map(dayGroupHtml).join("")}`;
 
@@ -1035,11 +1035,11 @@ function renderUndatedCourse(courseId) {
   const hiddenCount = needDate.length - UNDATED_SHOWN;
   const more =
     hiddenCount > 0
-      ? `<button class="umore" data-act="more">${showAll ? "Show fewer" : `Show ${hiddenCount} more`}</button>`
+      ? `<button class="umore" data-act="more">${showAll ? "Fewer" : `${hiddenCount} more`}</button>`
       : "";
   const list = needDate.length
     ? `<ul class="ulist">${needDate.map((entry, i) => undatedRowHtml(entry, courseId, i >= UNDATED_SHOWN)).join("")}</ul>${more}`
-    : `<p class="sub uall">Every reading has a due date or is hidden.</p>`;
+    : `<p class="sub uall">All caught up.</p>`;
   const discussedList = discussed.length
     ? `
       <details class="udiscussed" ${undatedDiscussedOpen.has(courseId) ? "open" : ""}>
@@ -1209,7 +1209,7 @@ function updateTopSlot() {
 }
 
 function fail(message) {
-  setLoading("failed", "Stopped loading. See the error below.");
+  setLoading("failed", "Stopped loading.");
   $("#err").innerHTML = `<div class="err">Couldn't load data: ${esc(message)}</div>`;
   $("#sub").textContent = "Error";
 }
