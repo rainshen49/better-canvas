@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Better Canvas</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Better Canvas</h1>
+        <div class="sub" id="sub">Loading…</div>
+      </div>
+      <nav>
+        <button id="tab-due" class="on">Due soon</button>
+        <button id="tab-mat">Slides &amp; readings</button>
+      </nav>
+      <button class="btn" id="signout" title="Forget your token in this browser">Log out</button>
+    </header>
+
+    <main>
+      <!-- Status bar: progress while loading, then ✓ or ✕ -->
+      <div id="loadbar" class="loadbar hidden" role="status" aria-live="polite">
+        <span class="ok" id="loadicon">✓</span>
+        <span id="loadtxt">Connecting to CourseWorks…</span>
+        <div class="prog"><i id="progfill"></i></div>
+      </div>
+
+      <div id="err"></div>
+
+      <!-- Login screen: shown when no token is saved, after logging out, or when CourseWorks rejects the token -->
+      <section id="auth" class="hidden">
+        <form class="authcard" id="authform" autocomplete="off">
+          <h2>Log in with CourseWorks</h2>
+          <p class="sub">You'll stay logged in on this browser.</p>
+          <ol class="steps">
+            <li>
+              Open
+              <a href="https://courseworks2.columbia.edu/profile/settings" target="_blank" rel="noopener">CourseWorks settings</a>.
+            </li>
+            <li>Click <b>+ New Access Token</b>, enter any name, then <b>Generate Token</b>.</li>
+            <li>Copy the token and paste it below.</li>
+          </ol>
+          <input id="tokeninput" type="password" placeholder="Access token" aria-label="Access token" spellcheck="false" required />
+          <div id="autherr"></div>
+          <button class="btn primary" type="submit">Log in</button>
+        </form>
+      </section>
+
+      <!-- "Due soon" tab (filled in by app.js) -->
+      <section id="due"></section>
+
+      <!-- "Slides & readings" tab -->
+      <section id="mat" class="hidden">
+        <div class="tools">
+          <input id="q" placeholder="Search titles… (e.g. week 3, DCF, case)" />
+          <button class="chip on" data-f="all">All</button>
+          <button class="chip" data-f="slides">📊 Slides</button>
+          <button class="chip" data-f="reading">📄 Readings</button>
+          <button class="chip" data-f="video">🎬 Recordings</button>
+          <button class="chip" data-f="other">🔗 Other</button>
+          <button class="chip" id="toggleAll">Expand all</button>
+        </div>
+        <!-- One card per course (filled in by app.js) -->
+        <div id="courses"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

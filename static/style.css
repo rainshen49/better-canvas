@@ -1,0 +1,990 @@
+/* ==========================================================================
+   Colors (light mode, then dark mode)
+   ========================================================================== */
+
+:root {
+  --bg: #f6f7f9;
+  --card: #fff;
+  --ink: #1c2230;
+  --mute: #667085;
+  --line: #e4e7ec;
+  --acc: #1d4f91;
+  --accbg: #e8f0fb;
+  --warn: #b42318;
+  --warnbg: #fdecea;
+  --ok: #067647;
+  --okbg: #e6f4ec;
+  --amber: #b54708;
+  --amberbg: #fef3e2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1319;
+    --card: #171c24;
+    --ink: #e6e9ef;
+    --mute: #98a2b3;
+    --line: #2a313d;
+    --acc: #8ab4f8;
+    --accbg: #1b2a40;
+    --warn: #f97066;
+    --warnbg: #3a1a18;
+    --ok: #47cd89;
+    --okbg: #12301f;
+    --amber: #fdb022;
+    --amberbg: #3a2a10;
+  }
+}
+
+/* ==========================================================================
+   Page layout and header
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+
+h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+nav {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+nav button,
+.btn {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+nav button.on {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--card);
+}
+
+/* ==========================================================================
+   Shared pieces
+   ========================================================================== */
+
+.hidden {
+  display: none !important;
+}
+
+.sub {
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.code {
+  color: var(--mute);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Small rounded labels */
+.tag {
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.t-course {
+  display: inline-block;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  background: var(--accbg);
+  color: var(--acc);
+}
+
+.t-ok {
+  background: var(--okbg);
+  color: var(--ok);
+}
+
+.t-miss {
+  background: var(--warnbg);
+  color: var(--warn);
+}
+
+.t-soon {
+  background: var(--amberbg);
+  color: var(--amber);
+}
+
+.ic {
+  flex: none;
+  width: 20px;
+  text-align: center;
+}
+
+.empty {
+  padding: 24px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--mute);
+  text-align: center;
+}
+
+.err {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--warnbg);
+  color: var(--warn);
+}
+
+/* Spinning circle for things still loading */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  display: inline-block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--line);
+  border-top-color: var(--acc);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 2s;
+  }
+}
+
+/* ==========================================================================
+   Status bar
+   It keeps the same height from start to finish, so nothing below it jumps
+   around. It's hidden only on the login screen.
+   ========================================================================== */
+
+.loadbar {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr 6px;
+  column-gap: 12px;
+  row-gap: 10px;
+  align-items: center;
+  height: 68px;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--acc);
+  border-radius: 12px;
+  background: var(--accbg);
+  color: var(--acc);
+  font-weight: 600;
+  transition:
+    background 0.4s,
+    border-color 0.4s,
+    color 0.4s;
+}
+
+#loadtxt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ✓ when loading finishes, ✕ if it fails */
+.loadbar .ok {
+  display: none;
+  font-size: 17px;
+  text-align: center;
+}
+
+.prog {
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--card);
+  transition: opacity 0.4s;
+}
+
+.prog i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 6px;
+  background: var(--acc);
+  transition: width 0.35s ease;
+}
+
+.loadbar.done {
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: 1fr 0;
+  row-gap: 0;
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--mute);
+  font-weight: 500;
+}
+
+.loadbar.done .ok {
+  display: block;
+  color: var(--ok);
+}
+
+.loadbar.done .prog {
+  opacity: 0;
+}
+
+.loadbar.failed .ok {
+  color: var(--warn);
+}
+
+/* ==========================================================================
+   Login screen
+   ========================================================================== */
+
+.authcard {
+  max-width: 520px;
+  margin: 40px auto;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.authcard h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.authcard input {
+  width: 100%;
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+.steps {
+  margin: 14px 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.steps li {
+  margin: 4px 0;
+}
+
+.steps a {
+  color: var(--acc);
+}
+
+.btn.primary {
+  width: 100%;
+  padding: 10px;
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--card);
+  font-weight: 600;
+}
+
+#autherr .err {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+/* ==========================================================================
+   "Due soon" tab
+   ========================================================================== */
+
+.due-summary {
+  margin: 0 0 14px;
+}
+
+/* Note that reading due dates come from classmates */
+.note {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+  background: var(--amberbg);
+  color: var(--amber);
+  font-size: 13.5px;
+}
+
+.day {
+  margin: 0 0 18px;
+}
+
+.day h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--mute);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.day h2 .rel {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* One due item: time | title and course | status */
+.row {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.row.done {
+  opacity: 0.55;
+}
+
+.row a {
+  color: var(--ink);
+  font-weight: 550;
+  text-decoration: none;
+}
+
+.row a:hover {
+  color: var(--acc);
+  text-decoration: underline;
+}
+
+.time {
+  color: var(--mute);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dtitle {
+  font-weight: 550;
+}
+
+.meta {
+  color: var(--mute);
+  font-size: 12.5px;
+}
+
+.rstat {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Expanding a due item */
+details.ditem {
+  margin-bottom: 6px;
+}
+
+details.ditem > summary {
+  margin-bottom: 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+details.ditem > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.ditem > summary:hover {
+  border-color: var(--acc);
+}
+
+details.ditem[open] > summary {
+  border-color: var(--acc);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.chev {
+  color: var(--mute);
+  font-size: 13px;
+  transition: transform 0.15s;
+}
+
+details.ditem[open] .chev {
+  transform: rotate(90deg);
+}
+
+/* Details panel under an expanded item */
+.dbody {
+  padding: 14px 18px 16px;
+  border: 1px solid var(--acc);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--card);
+}
+
+.dbody h4 {
+  margin: 16px 0 6px;
+  color: var(--mute);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dbody .spin {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  vertical-align: -2px;
+}
+
+.dload {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--mute);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.chips span {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--bg);
+  font-size: 12.5px;
+}
+
+/* Assignment description, as the instructor wrote it in CourseWorks */
+.desc {
+  font-size: 14.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.desc img,
+.desc video,
+.desc iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+.desc table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.desc td,
+.desc th {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+}
+
+.desc a {
+  color: var(--acc);
+}
+
+.desc p {
+  margin: 0.5em 0;
+}
+
+/* Attached and related files */
+ul.files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+ul.files li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+ul.files li:last-child {
+  border-bottom: 0;
+}
+
+ul.files a {
+  color: var(--acc);
+  text-decoration: none;
+}
+
+ul.files a:hover {
+  text-decoration: underline;
+}
+
+ul.files .ctx {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.dlbtn {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--acc);
+  border-radius: 99px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.openlink {
+  display: inline-block;
+  margin-top: 14px;
+  color: var(--acc);
+  font-size: 13.5px;
+}
+
+/* ==========================================================================
+   "Slides & readings" tab
+   ========================================================================== */
+
+/* Search box and filter buttons */
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tools input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+
+.chip {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* "Classes" heading and the collapsed "Other sites" section */
+.group,
+details.others > summary {
+  margin: 22px 0 10px;
+  color: var(--mute);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+details.others > summary {
+  cursor: pointer;
+}
+
+/* Placeholder card shown while a course loads */
+.skel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font-weight: 650;
+}
+
+.skel .sub {
+  font-weight: 400;
+}
+
+.skel.failed {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* Course card */
+details.course {
+  margin-bottom: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  animation: fadein 0.35s ease;
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+details.course > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  font-weight: 650;
+  list-style: none;
+  cursor: pointer;
+}
+
+details.course > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.course > summary::before {
+  content: "▸";
+  color: var(--mute);
+  transition: transform 0.15s;
+}
+
+details.course[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.counts {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.course-open {
+  color: var(--mute);
+}
+
+.cbody {
+  padding: 0 16px 14px;
+}
+
+.no-materials {
+  padding: 6px 0;
+}
+
+/* Shortcut links (Echo360, Video Library, Ed, Zoom) at the top of a course */
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+
+.quick a {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  color: var(--ink);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.quick a:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+/* Modules and folders inside a course */
+.mod {
+  margin-top: 10px;
+}
+
+.mod h3 {
+  margin: 0 0 4px;
+  color: var(--mute);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.not-in-module {
+  font-weight: 400;
+}
+
+ul.mat {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+ul.mat li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+ul.mat li:last-child {
+  border-bottom: 0;
+}
+
+ul.mat a {
+  color: var(--acc);
+  text-decoration: none;
+}
+
+ul.mat a:hover {
+  text-decoration: underline;
+}
+
+/* Subheading inside a module */
+.sh {
+  margin: 6px 0 2px;
+  color: var(--mute);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.dl {
+  margin-left: auto;
+  color: var(--mute);
+  font-size: 12px;
+}
+
+/* Title of anything that opens a preview underneath */
+.plink {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plink:hover {
+  text-decoration: underline;
+}
+
+.pchev {
+  display: inline-block;
+  color: var(--mute);
+  font-size: 11px;
+  transition: transform 0.15s;
+}
+
+.plink[aria-expanded="true"] .pchev {
+  transform: rotate(90deg);
+}
+
+/* The preview itself, on its own line under the item's title */
+.preview {
+  flex-basis: 100%;
+  margin: 6px 0 4px;
+}
+
+.pframe {
+  display: block;
+  width: 100%;
+  height: min(75vh, 720px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.pimg {
+  display: block;
+  max-width: 100%;
+  max-height: 75vh;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.pvideo {
+  display: block;
+  width: 100%;
+  max-height: 75vh;
+  border-radius: 8px;
+  background: #000;
+}
+
+.pframe.pvideo-frame {
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+.ptext {
+  max-height: 60vh;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A CourseWorks page shown inline */
+.ppage {
+  max-height: 75vh;
+  padding: 4px 16px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.plinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 600px) {
+  .pframe {
+    height: 60vh;
+  }
+}
+
+/* A reading's due date (added by classmates), or the button to add one */
+.rdue {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.rdue + .dl {
+  margin-left: 0;
+}
+
+.rdue-val {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.rdue-val.past {
+  color: var(--mute);
+  font-weight: 400;
+}
+
+.rdue-btn {
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--card);
+  color: var(--mute);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rdue-btn:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+.rdue-btn.primary {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--card);
+}
+
+.rdue-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The row of day buttons shown while picking a due date */
+.rdue-days {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rdue-err {
+  color: var(--warn);
+}
+
+/* ==========================================================================
+   Phones
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  nav {
+    margin-left: 0;
+  }
+}
