@@ -94,10 +94,7 @@ canvas/
 │       ├── store.ts                    # saving reading due dates and "discussed" marks (Postgres)
 │       ├── sanitize.ts                 # cleaning instructors' HTML
 │       └── config.ts                   # settings
-├── .github/workflows/pages.yml         # publishes static/ to GitHub Pages
-└── tests/
-    ├── mock.py                         # early fake Canvas server (from the first version)
-    └── shot.py                         # early Playwright screenshot script (from the first version)
+└── .github/workflows/pages.yml         # publishes static/ to GitHub Pages
 ```
 
 ---
@@ -238,7 +235,7 @@ Anything that can be previewed opens underneath its title when clicked, instead 
 - Matching related files relies on numbered names such as "HW02" or "Homework 1", so assignments without numbers get no related files.
 - When run locally and opened from another device, the app uses plain `http://`, so tokens travel unencrypted on the local network. That's fine on a trusted home network. On shared Wi-Fi (e.g. campus), use `HOST=127.0.0.1`, or use the published HTTPS site.
 - A Chrome extension would avoid CORS and the server entirely, using the CourseWorks login session instead of a token.
-- `tests/` still holds the early Python mock and screenshot scripts. They haven't been updated since, and the fake-CourseWorks tests described above aren't in the project.
+- There are no automated tests in the project. The fake-CourseWorks tests described above were run by hand and aren't saved here (the first version's early mock and screenshot scripts were removed).
 - Previews and reading due dates haven't been tried against the real CourseWorks yet. In particular, CourseWorks's document viewer may refuse to be shown inside another site.
 - The server's "today" is New York's (`APP_TIMEZONE`), while the day buttons use the viewer's own date. Someone in another time zone near midnight may see a button the server refuses.
 - The login screen links straight to `courseworks2.columbia.edu/profile/settings`, even if `CANVAS_BASE` points elsewhere.

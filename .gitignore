@@ -5,6 +5,5 @@ node_modules/
 # Supabase CLI working files
 supabase/.temp/
 supabase/.branches/
-# Left over from the earlier Python version
+# The earlier Python version's environment, if still on disk
 .venv/
-__pycache__/
