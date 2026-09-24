@@ -134,8 +134,26 @@ nav button.on {
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: bottom;
-  background: var(--accbg);
-  color: var(--acc);
+  background: var(--ccbg, var(--accbg));
+  color: var(--cc, var(--acc));
+}
+
+/* Course colors: app.js sets --h (a hue) on anything with class "cc" */
+.cc {
+  --cc: hsl(var(--h, 212) 62% 36%);
+  --ccbg: hsl(var(--h, 212) 75% 94%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .cc {
+    --cc: hsl(var(--h, 212) 75% 74%);
+    --ccbg: hsl(var(--h, 212) 35% 20%);
+  }
+}
+
+details.course.cc,
+.ucourse.cc {
+  border-left: 4px solid var(--cc);
 }
 
 .t-ok {
@@ -373,22 +391,31 @@ nav button.on {
   align-items: center; /* centered in the box, which is as tall as the progress bar */
   column-gap: 0.35em;
   padding: 10px 14px;
-  border: 1px solid var(--amber);
+  row-gap: 6px;
+  border: 1px solid var(--acc);
   border-radius: 12px;
-  background: var(--amberbg);
-  color: var(--amber);
+  background: var(--accbg);
+  color: var(--acc);
   font-size: 13.5px;
+  font-weight: 550;
 }
 
-.note a {
-  color: inherit;
+/* "Add due dates" button: scrolls to "Readings without a due date" */
+.note .jump-undated {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--acc);
+  border-radius: 99px;
+  background: var(--acc);
+  color: var(--card);
+  font: inherit;
+  font-size: 13px;
   font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
-.note a:hover {
-  text-decoration-thickness: 2px;
+.note .jump-undated:hover {
+  filter: brightness(1.1);
 }
 
 .day {
@@ -791,10 +818,6 @@ details.course[open] > summary::before {
   font-weight: 600;
 }
 
-.not-in-module {
-  font-weight: 400;
-}
-
 ul.mat {
   margin: 0;
   padding: 0;
@@ -877,25 +900,27 @@ li a.dl:focus-visible::after {
   transition-delay: 0.15s;
 }
 
-/* Title of anything that opens a preview underneath */
+/* Title of anything that expands to show a preview underneath (not a link) */
 .plink {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--acc);
+  color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
-.plink:hover {
-  text-decoration: underline;
+.plink:hover .pchev {
+  color: var(--acc);
 }
 
 .pchev {
   display: inline-block;
-  color: var(--mute);
-  font-size: 11px;
+  margin-left: 2px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
   transition: transform 0.15s;
 }
 
@@ -1013,6 +1038,19 @@ li a.dl:focus-visible::after {
 .rdue-btn:hover {
   border-color: var(--acc);
   color: var(--acc);
+}
+
+.rdue-btn.danger {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.rdue-btn.danger:hover {
+  background: var(--warnbg);
+}
+
+.rdue-btn.icon {
+  padding: 2px 7px;
 }
 
 .rdue-btn.primary {

@@ -55,6 +55,16 @@ let activeFilter = "all";
 // Lets a new load, or logging out, stop a load that is still in progress.
 let currentRequest = null;
 
+// Each course gets its own color (a hue), in the order the courses are listed.
+const COURSE_HUES = [212, 150, 28, 282, 350, 184, 48, 250, 100, 322];
+
+/** Attributes that color an element by its course: use the --cc and --ccbg colors from style.css. */
+function courseColor(courseId) {
+  const index = DATA?.courses?.findIndex((course) => course.id === courseId) ?? -1;
+  if (index < 0) return "";
+  return `style="--h:${COURSE_HUES[index % COURSE_HUES.length]}"`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tabs
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,7 +168,7 @@ function dueItemHtml(item) {
         <div class="time">${time}</div>
         <div>
           <span class="dtitle">${esc(item.title)}</span>
-          <div class="meta"><span class="tag t-course">${esc(item.course)}</span> ${typeLabel}${points}${addedBy}</div>
+          <div class="meta"><span class="tag t-course cc" ${courseColor(item.course_id)}>${esc(item.course)}</span> ${typeLabel}${points}${addedBy}</div>
         </div>
         <div class="rstat">${statusTag(item)}<span class="chev" aria-hidden="true">▸</span></div>
       </summary>
@@ -183,7 +193,7 @@ function scrollToUndated() {
   window.scrollTo({ top, behavior: "smooth" });
 }
 
-// The "Contribute below" link in the note at the top. The note is in index.html.
+// The "Add due dates" button in the callout at the top. The callout is in index.html.
 $("#readnote").addEventListener("click", (event) => {
   if (!event.target.closest(".jump-undated")) return;
   event.preventDefault();
@@ -335,7 +345,7 @@ function fillDetail(key) {
   if (item.type === "reading") {
     body.innerHTML = `
       <p class="sub">Due date added by ${esc(item.added_by)} on ${formatDateTime(item.added_at)}.</p>
-      <div class="rdue-line">${readingDueBoxHtml(item.course_id, item.url)}</div>
+      <div class="rdue-line">${readingDueBoxHtml(item.course_id, item.url, true)}</div>
       ${externalLink(item.url, "Open reading ↗", "openlink")}`;
     return;
   }
@@ -407,18 +417,24 @@ function moduleHtml(module, courseId) {
   return `<div class="mod"><h3>${esc(module.name)}</h3><ul class="mat">${rows.join("")}</ul></div>`;
 }
 
-/** Files not linked from a module or the syllabus, grouped by folder. */
+/**
+ * Files not linked from a module or the syllabus. In a course with modules
+ * they're listed after the modules as they are; otherwise they're grouped by folder.
+ */
 function looseFilesHtml(course) {
+  if (course.modules.length) {
+    const rows = course.files.map((file) => materialHtml(file, course.id)).join("");
+    return `<div class="mod"><ul class="mat">${rows}</ul></div>`;
+  }
   const byFolder = {};
   for (const file of course.files) {
     (byFolder[file.folder || "Files"] ??= []).push(file);
   }
-  const note = course.modules.length ? `<span class="not-in-module">(not in a module)</span>` : "";
   return Object.entries(byFolder)
     .map(
       ([folder, files]) => `
         <div class="mod">
-          <h3>📁 ${esc(folder)} ${note}</h3>
+          <h3>📁 ${esc(folder)}</h3>
           <ul class="mat">${files.map((file) => materialHtml(file, course.id)).join("")}</ul>
         </div>`,
     )
@@ -467,7 +483,7 @@ function courseCardHtml(course, open) {
   }
 
   return `
-    <details class="course" data-cid="${course.id}" ${open ? "open" : ""}>
+    <details class="course cc" data-cid="${course.id}" ${courseColor(course.id)} ${open ? "open" : ""}>
       <summary>
         ${courseTitleHtml(course)}
         <span class="counts">
@@ -514,7 +530,7 @@ function placeCourse(course) {
   if (!placeholder) return;
   const listing = DATA.courses.find((c) => c.id === course.id) || {};
   DATA.mats[course.id] = course;
-  placeholder.outerHTML = courseCardHtml({ ...listing, ...course }, !!listing.is_class);
+  placeholder.outerHTML = courseCardHtml({ ...listing, ...course }, false);
   applyFilter();
   refreshOpenDetails();
   renderUndatedCourse(course.id);
@@ -705,22 +721,28 @@ for (const tab of ["#courses", "#due"]) {
 const readingDeadline = (courseId, url) => DATA.mats[courseId]?.deadlines?.[url];
 const readingDiscussed = (courseId, url) => DATA.mats[courseId]?.discussed?.[url];
 
-/** The box holding a reading's due date and its buttons. The same reading can have a box on both tabs. */
-function readingDueBoxHtml(courseId, url) {
-  return `<span class="rdue" data-cid="${courseId}" data-url="${esc(url)}">${readingDueHtml(courseId, url)}</span>`;
+/**
+ * The box holding a reading's due date and its buttons. The same reading can
+ * have a box on both tabs. Hiding a reading only matters on the "Due soon" tab,
+ * so only boxes there (canHide) offer it.
+ */
+function readingDueBoxHtml(courseId, url, canHide = false) {
+  const hide = canHide ? ` data-hide="1"` : "";
+  return `<span class="rdue" data-cid="${courseId}" data-url="${esc(url)}"${hide}>${readingDueHtml(courseId, url, canHide)}</span>`;
 }
 
-/** What's inside the box: the due date (or "Discussed") and buttons to change it. */
-function readingDueHtml(courseId, url) {
+/** What's inside the box: the due date (or "Hidden") and buttons to change it. */
+function readingDueHtml(courseId, url, canHide) {
   const errorSlot = `<span class="rdue-err" role="alert"></span>`;
 
+  // Where hiding isn't offered, a hidden reading just shows "+ Due date".
   const discussed = readingDiscussed(courseId, url);
-  if (discussed) {
+  if (discussed && canHide) {
     return `
-      <span class="rdue-val discussed" title="Marked by ${esc(discussed.by)} on ${formatDateTime(discussed.at)}">
-        ✓ Discussed · ${esc(discussed.by)}
+      <span class="rdue-val discussed" title="Hidden by ${esc(discussed.by)} on ${formatDateTime(discussed.at)}">
+        Hidden · ${esc(discussed.by)}
       </span>
-      <button class="rdue-btn" data-act="undiscuss" title="Not discussed after all: list it again as needing a due date, for everyone in the course">Undo</button>
+      <button class="rdue-btn" data-act="undiscuss" title="List it again as needing a due date, for everyone in the course">Unhide</button>
       ${errorSlot}`;
   }
 
@@ -728,7 +750,7 @@ function readingDueHtml(courseId, url) {
   if (!deadline) {
     return `
       <button class="rdue-btn" data-act="edit">+ Due date</button>
-      <button class="rdue-btn" data-act="discuss" title="Already discussed in class, so it doesn't need a due date. Applies to everyone in the course">✓ Discussed</button>
+      ${canHide ? `<button class="rdue-btn" data-act="discuss" title="It doesn't need a due date (e.g. already covered in class): stop listing it, for everyone in the course">Hide</button>` : ""}
       ${errorSlot}`;
   }
 
@@ -763,15 +785,15 @@ function openDueEditor(box) {
   }
   box.innerHTML = `
     <span class="rdue-days" role="group" aria-label="Pick a due date">${dayButtons.join("")}</span>
-    ${deadline ? `<button class="rdue-btn" data-act="remove">Remove</button>` : ""}
-    ${deadline ? `<button class="rdue-btn" data-act="discuss" title="Remove the date and mark it as discussed in class, for everyone in the course">✓ Discussed</button>` : ""}
-    <button class="rdue-btn" data-act="cancel">Cancel</button>
+    ${deadline ? `<button class="rdue-btn danger" data-act="remove">Remove</button>` : ""}
+    ${deadline && box.dataset.hide ? `<button class="rdue-btn" data-act="discuss" title="Remove the date and hide it, for everyone in the course">Hide</button>` : ""}
+    <button class="rdue-btn icon" data-act="cancel" aria-label="Cancel" title="Cancel">✕</button>
     <span class="rdue-err" role="alert"></span>`;
   box.querySelector(".rdue-day").focus();
 }
 
 function closeDueEditor(box) {
-  box.innerHTML = readingDueHtml(Number(box.dataset.cid), box.dataset.url);
+  box.innerHTML = readingDueHtml(Number(box.dataset.cid), box.dataset.url, !!box.dataset.hide);
 }
 
 /** Put a reading's state ({deadline, discussed}, each null if not set) into DATA and redraw it everywhere. */
@@ -984,7 +1006,7 @@ function undatedRowHtml(entry, courseId, extra) {
   return `
     <li class="${extra ? "extra" : ""}">
       <span class="ic">📄</span>
-      ${fileTitleHtml(entry)}${where}${readingDueBoxHtml(courseId, entry.url)}${previewPanelHtml(entry, courseId)}
+      ${fileTitleHtml(entry)}${where}${readingDueBoxHtml(courseId, entry.url, true)}${previewPanelHtml(entry, courseId)}
     </li>`;
 }
 
@@ -995,7 +1017,7 @@ function renderUndatedPlaceholders() {
   const classes = DATA.courses.filter((course) => course.is_class);
   $("#undated").innerHTML = `
     <h2 class="undated-h hidden">Readings without a due date</h2>
-    ${classes.map((course) => `<div class="ucourse hidden" data-cid="${course.id}"></div>`).join("")}`;
+    ${classes.map((course) => `<div class="ucourse cc hidden" data-cid="${course.id}" ${courseColor(course.id)}></div>`).join("")}`;
 }
 
 /** Fill in (or redraw) one class's card. */
@@ -1017,11 +1039,11 @@ function renderUndatedCourse(courseId) {
       : "";
   const list = needDate.length
     ? `<ul class="ulist">${needDate.map((entry, i) => undatedRowHtml(entry, courseId, i >= UNDATED_SHOWN)).join("")}</ul>${more}`
-    : `<p class="sub uall">Every reading has a due date or was discussed in class.</p>`;
+    : `<p class="sub uall">Every reading has a due date or is hidden.</p>`;
   const discussedList = discussed.length
     ? `
       <details class="udiscussed" ${undatedDiscussedOpen.has(courseId) ? "open" : ""}>
-        <summary>${discussed.length} discussed</summary>
+        <summary>${discussed.length} hidden</summary>
         <ul class="ulist">${discussed.map((entry) => undatedRowHtml(entry, courseId, false)).join("")}</ul>
       </details>`
     : "";

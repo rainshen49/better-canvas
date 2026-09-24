@@ -21,7 +21,7 @@
 
     <main>
       <!-- One box at the top. While loading it shows progress. Once everything
-           has loaded it shows the note about reading due dates on "Due soon",
+           has loaded it shows the callout asking for reading due dates on "Due soon",
            and ✓ (or ✕ if loading failed) on "Slides & readings". The two are
            stacked in the same spot, so the box doesn't change size when they swap. -->
       <div id="topslot" class="topslot hidden">
@@ -31,8 +31,8 @@
           <div class="prog"><i id="progfill"></i></div>
         </div>
         <div id="readnote" class="note" role="note">
-          ⚠️ <b>Reading due dates come from classmates.</b>
-          <a href="#undated" class="jump-undated">Contribute below</a>
+          <span>🤝 Help out your classmates by adding due dates for readings</span>
+          <button type="button" class="jump-undated">Add due dates ↓</button>
         </div>
       </div>
 
