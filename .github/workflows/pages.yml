@@ -1,0 +1,52 @@
+# Publishes the page (static/) to GitHub Pages whenever it changes on main.
+#
+# One-time setup on GitHub:
+#   1. Settings → Pages → Source: "GitHub Actions".
+#   2. Settings → Secrets and variables → Actions → Variables → New repository
+#      variable BETTER_CANVAS_API = https://<project-ref>.supabase.co/functions/v1
+#      (your Supabase Edge Function's address, without /api at the end).
+
+name: Publish page
+
+on:
+  push:
+    branches: [main]
+    paths: ["static/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Point the page at the Edge Function
+        env:
+          API: ${{ vars.BETTER_CANVAS_API }}
+        run: |
+          if [ -z "$API" ]; then
+            echo "::error::Set the BETTER_CANVAS_API repository variable (see the top of this file)."
+            exit 1
+          fi
+          mkdir -p site
+          cp static/index.html static/style.css static/app.js site/
+          printf 'window.BETTER_CANVAS_API = %s;\n' "$(jq -Rn --arg v "$API" '$v')" > site/config.js
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
