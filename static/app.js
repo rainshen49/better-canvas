@@ -44,6 +44,10 @@ const MS_PER_DAY = 864e5;
 // A reading's due date can be one of this many days, starting today (the server checks this too).
 const PICK_DAYS = 7;
 
+// Where the API is: "" for the same server (running locally), or the Supabase
+// Edge Function's address when the page is on GitHub Pages. Set in config.js.
+const API = String(window.BETTER_CANVAS_API || "").replace(/\/+$/, "");
+
 // Everything the server has sent so far for this page load (null until the course list arrives).
 let DATA = null;
 // Which material category is shown on the "Slides & readings" tab.
@@ -566,7 +570,7 @@ function previewPanelHtml(entry, courseId) {
 async function fetchWithToken(path) {
   let response;
   try {
-    response = await fetch(path, { headers: { "X-Canvas-Token": getToken() } });
+    response = await fetch(API + path, { headers: { "X-Canvas-Token": getToken() } });
   } catch (e) {
     throw new Error("couldn't reach the server");
   }
@@ -813,7 +817,7 @@ const savedState = {};
 /** Send one change to the server. Always returns an object: the saved state, or {error}. */
 async function sendReadingChange(courseId, url, change) {
   try {
-    const response = await fetch("/api/reading-deadline", {
+    const response = await fetch(`${API}/api/reading-deadline`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Canvas-Token": getToken() },
       body: JSON.stringify({ course_id: courseId, url, ...change }),
@@ -1299,7 +1303,7 @@ async function load() {
 
   let response;
   try {
-    response = await fetch("/api/data", {
+    response = await fetch(`${API}/api/data`, {
       headers: { "X-Canvas-Token": token },
       signal: request.signal,
     });

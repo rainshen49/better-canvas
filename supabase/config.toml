@@ -1,0 +1,10 @@
+# Supabase settings for this project (used by the Supabase CLI).
+# Only the function setting matters for deploying; run `supabase init` to add
+# the rest if you ever want to run all of Supabase on this computer.
+
+project_id = "better-canvas"
+
+[functions.api]
+# Visitors sign in with their own CourseWorks token (the X-Canvas-Token header),
+# not a Supabase login, so Supabase's own login check is turned off.
+verify_jwt = false

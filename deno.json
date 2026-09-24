@@ -1,0 +1,20 @@
+{
+  "workspace": [
+    "./supabase/functions/api"
+  ],
+  "tasks": {
+    "start": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys --allow-run dev.ts",
+    "check": "deno check dev.ts supabase/functions/api/index.ts",
+    "deploy": "supabase functions deploy api"
+  },
+  "fmt": {
+    "lineWidth": 120
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any"
+      ]
+    }
+  }
+}

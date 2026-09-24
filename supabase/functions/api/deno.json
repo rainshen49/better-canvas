@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "entities": "npm:entities@4.5.0",
+    "postgres": "npm:postgres@3.4.5",
+    "sanitize-html": "npm:sanitize-html@2.13.1"
+  }
+}

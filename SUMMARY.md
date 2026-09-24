@@ -8,49 +8,64 @@ A small web app for Columbia CourseWorks (Canvas) that shows:
 
 ---
 
-## How to run
+## How it's put together
 
-The project includes a ready-made virtual environment in `.venv` (Python 3.9, with fastapi, uvicorn, httpx and nh3 already installed), so there's nothing to install:
+- **The page** (`static/`) is plain HTML, CSS and JavaScript. It's published on **GitHub Pages**.
+- **The API** is one **Supabase Edge Function** called `api` (`supabase/functions/api/`, TypeScript on Deno). It talks to CourseWorks with each visitor's own token and saves reading due dates.
+- **Reading due dates** are saved in the Supabase project's **Postgres** database. The function connects to it directly with plain SQL (the `postgres` driver, using the `SUPABASE_DB_URL` connection string Supabase provides).
+- **On your own computer**, `deno task start` runs the same API code and serves the page too, saving dates in a SQLite file.
 
-```bash
-cd ~/Desktop/dev/canvas
-source .venv/bin/activate            # use the bundled environment
-python better_canvas.py              # opens http://localhost:8765
-```
-
-Or, without activating it: `.venv/bin/python better_canvas.py`.
-
-If `.venv` is ever missing or broken, recreate it with `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.
-
-On first visit the page shows a **Log in with CourseWorks** screen. You create an access token in CourseWorks settings (**+ New Access Token**, any name, **Generate Token**) and paste it in. The browser remembers it, so you stay logged in until you click **Log out** or the token expires.
-
-### Configuration (environment variables)
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `PORT` | `8765` | Port to listen on |
-| `HOST` | `0.0.0.0` | Other devices on your network can open the app at the address printed on startup. Set to `127.0.0.1` to allow only this computer |
-| `DAYS_AHEAD` | `14` | How far ahead "Due soon" looks, for both CourseWorks items and classmates' reading dates |
-| `IGNORE_COURSES` | *(none)* | Extra comma-separated course codes/names to hide. Always hidden: `ENGIE4503` (Analytics in Python), any course with "Exemption" in its name, "CBS Python Level 1" and "SEAS Mandatory Orientation Tutorials" |
-| `CANVAS_BASE` | `https://courseworks2.columbia.edu` | Canvas instance, e.g. a mock server for testing |
-| `NO_BROWSER` | *(unset)* | Don't auto-open a browser tab |
-| `DEADLINES_DB` | `reading_deadlines.db` next to `better_canvas.py` | Where classmates' reading due dates are saved |
-| `DATABASE_URL` | *(unset)* | A Postgres address (`postgres://…`). When set, reading due dates are saved there instead of in `DEADLINES_DB`. Needed on hosts that wipe files on each deploy |
-| `TZ` | the server's own | Set to `America/New_York` on a hosted server, so "today" and the 7 pickable days follow New York dates instead of UTC |
+This replaced the earlier Python (FastAPI) server, which is still in git history.
 
 ---
 
-## Deploying (Heroku, Cloud Run and similar)
+## How to run it on your computer
 
-These hosts wipe the server's files on every deploy and restart, so the SQLite file would lose everyone's dates. Use a hosted Postgres instead:
+Install Deno once (`brew install deno`, or see deno.com), then:
 
-1. Create a Postgres database: Heroku Postgres (`heroku addons:create heroku-postgresql:essential-0`, which sets `DATABASE_URL` for you), or a free one from Neon or Supabase.
-2. Set these config vars on the app: `DATABASE_URL` (if the host didn't set it) and `TZ=America/New_York`.
-3. Deploy. The `Procfile` starts the app with uvicorn, and `.python-version` asks for Python 3.12. The table is created on first start.
+```bash
+cd ~/Desktop/dev/canvas
+deno task start              # opens http://localhost:8765
+```
 
-The host serves the app over HTTPS, so tokens aren't sent in plain text. `.gitignore` keeps `.venv`, `__pycache__` and the local `.db` file out of the deploy. Running locally without `DATABASE_URL` still uses the SQLite file, as before.
+The first run downloads the few libraries it needs. Reading due dates are saved in `reading_deadlines.db` next to `dev.ts`, or in Postgres if `DATABASE_URL` is set.
 
-Database calls run in a background thread (`asyncio.to_thread`), so a slow database connection doesn't hold up other people's requests. Postgres uses a small connection pool (up to 4 connections per server process) that checks each connection before using it, because hosted databases close idle ones.
+On first visit the page shows a **Log in with CourseWorks** screen. You create an access token in CourseWorks settings (**+ New Access Token**, any name, **Generate Token**) and paste it in. The browser remembers it, so you stay logged in until you click **Log out** or the token expires.
+
+### Settings (environment variables)
+
+| Variable | Default | Where | Purpose |
+|---|---|---|---|
+| `DAYS_AHEAD` | `14` | both | How far ahead "Due soon" looks, for both CourseWorks items and classmates' reading dates |
+| `IGNORE_COURSES` | *(none)* | both | Extra comma-separated course codes/names to hide. Always hidden: `ENGIE4503` (Analytics in Python), any course with "Exemption" in its name, "CBS Python Level 1" and "SEAS Mandatory Orientation Tutorials" |
+| `APP_TIMEZONE` | `America/New_York` | both | The time zone "today" and the 7 pickable days follow. Edge Functions run on UTC, so this keeps the day from switching over at 8 pm New York time |
+| `ALLOWED_ORIGINS` | `*` | both | Which sites may call the API from a browser, comma-separated (e.g. `https://rainshen49.github.io`). `*` allows any. Safe either way, because every call needs the visitor's own token, which only the page they logged in on has |
+| `CANVAS_BASE` | `https://courseworks2.columbia.edu` | both | Canvas instance, e.g. a fake server for testing |
+| `DATABASE_URL` | *(unset)* | both | A Postgres address. On Supabase you don't need it: the function uses `SUPABASE_DB_URL`, which Supabase sets automatically |
+| `PORT` | `8765` | local | Port to listen on |
+| `HOST` | `0.0.0.0` | local | Other devices on your network can open the app at the address printed on startup. Set to `127.0.0.1` to allow only this computer |
+| `NO_BROWSER` | *(unset)* | local | Don't open a browser tab |
+| `DEADLINES_DB` | `reading_deadlines.db` next to `dev.ts` | local | The SQLite file used when `DATABASE_URL` isn't set |
+
+On Supabase, set them with `supabase secrets set NAME=value` (all are optional).
+
+---
+
+## Deploying (Supabase + GitHub Pages)
+
+One-time setup:
+
+1. **Create a Supabase project** at supabase.com, and install the Supabase CLI (`brew install supabase/tap/supabase`).
+2. **Link this folder to it:** `supabase login`, then `supabase link --project-ref <project-ref>` (the ref is in the project's URL, e.g. `abcd1234`).
+3. **Create the tables:** `supabase db push` (runs `supabase/migrations/`). Optional: the function also creates them on first use.
+4. **Deploy the function:** `supabase functions deploy api` (or `deno task deploy`). `supabase/config.toml` turns off Supabase's own login check for it (`verify_jwt = false`), because visitors sign in with their CourseWorks token instead.
+5. **Optionally limit which site can call it:** `supabase secrets set ALLOWED_ORIGINS=https://rainshen49.github.io`.
+6. **Set up GitHub Pages:** in the GitHub repo, **Settings → Pages → Source: GitHub Actions**. Then **Settings → Secrets and variables → Actions → Variables** → add `BETTER_CANVAS_API` = `https://<project-ref>.supabase.co/functions/v1` (without `/api`).
+7. **Push to `main`.** The "Publish page" workflow (`.github/workflows/pages.yml`) copies `static/` and writes `config.js` pointing at the function. The site appears at `https://rainshen49.github.io/better-canvas/`.
+
+After that: change the page → push to `main` (it republishes automatically). Change the API → `supabase functions deploy api`.
+
+**Edge Function limits that matter here** (free plan): 2 s of CPU time and 150 s per request, and 256 MB of memory. Loading the page is almost all waiting on CourseWorks, which doesn't count as CPU time, so it fits comfortably. PDFs pass through as a stream, so large files don't use much memory.
 
 ---
 
@@ -58,28 +73,43 @@ Database calls run in a background thread (`asyncio.to_thread`), so a slow datab
 
 ```
 canvas/
-├── better_canvas.py           # server: talks to CourseWorks, sorts materials, streams data, previews, reading due dates
-├── requirements.txt           # fastapi, uvicorn, httpx, nh3
-├── reading_deadlines.db       # reading due dates added by classmates (created on first run)
-├── static/
-│   ├── index.html             # page shell
-│   ├── style.css              # styles (light + dark mode)
-│   └── app.js                 # login, stream reader, due list, materials, previews, reading due dates, filters
+├── dev.ts                              # run locally: serves static/ and the API; SQLite for dates
+├── deno.json                           # `deno task start` / `check` / `deploy`
+├── reading_deadlines.db                # local reading due dates (created on first local run; not in git)
+├── static/                             # the page (published to GitHub Pages)
+│   ├── index.html                      # page shell
+│   ├── config.js                       # where the API is ("" = same server; set when publishing)
+│   ├── style.css                       # styles (light + dark mode)
+│   └── app.js                          # login, stream reader, due list, materials, previews, reading due dates, filters
+├── supabase/
+│   ├── config.toml                     # turns off Supabase's login check for the `api` function
+│   ├── migrations/…_reading_dates.sql  # the two tables, with Row Level Security on
+│   └── functions/api/                  # the Edge Function
+│       ├── index.ts                    # entry point (Deno.serve)
+│       ├── app.ts                      # routes, streaming, CORS, reading due dates, previews
+│       ├── canvas.ts                   # CourseWorks client (one per request; holds the token)
+│       ├── materials.ts                # courses, modules, syllabus links, loose files
+│       ├── classify.ts                 # sorting into slides/readings/recordings/other, what can be previewed
+│       ├── due.ts                      # "Due soon" list and item details
+│       ├── store.ts                    # saving reading due dates and "discussed" marks (Postgres)
+│       ├── sanitize.ts                 # cleaning instructors' HTML
+│       └── config.ts                   # settings
+├── .github/workflows/pages.yml         # publishes static/ to GitHub Pages
 └── tests/
-    ├── mock.py                # early fake Canvas server (from the first version)
-    └── shot.py                # early Playwright screenshot script (from the first version)
+    ├── mock.py                         # early fake Canvas server (from the first version)
+    └── shot.py                         # early Playwright screenshot script (from the first version)
 ```
 
 ---
 
 ## Architecture
 
-### Backend (`better_canvas.py`)
-- **FastAPI + httpx (async).** Routes:
-  - `GET /` serves `static/index.html`, and `/static/*` serves the assets
+### API (`supabase/functions/api/`)
+- **Deno + `fetch`.** One handler serves every route. On Supabase the page calls `https://<project-ref>.supabase.co/functions/v1/api/<route>`; locally, `/api/<route>` on the same server:
   - `GET /api/data` streams everything the page shows (below)
   - `POST /api/reading-deadline` sets or removes a reading's due date, or marks / unmarks a reading as discussed in class
   - `GET /api/file-preview`, `GET /api/file-content` and `GET /api/page` power the previews
+- **CORS:** because the page (GitHub Pages) and the API (Supabase) are on different sites, every answer carries CORS headers, and the browser's preflight (`OPTIONS`) is answered. `ALLOWED_ORIGINS` can limit it to the Pages site.
 - **Streaming response (NDJSON)** from `/api/data`. Events arrive in completion order:
   - `start`: user name plus the course list, which the browser shows as loading placeholders right away
   - `due`: due items for the next `DAYS_AHEAD` days (from `/api/v1/planner/items`, falling back to per-course assignments if the planner can't be read), plus readings classmates have dated
@@ -88,13 +118,15 @@ canvas/
   - `course_error` / `due_error`: per-item failures that don't stop the rest
   - `done`
 - **Token validation happens before streaming**, so a bad or missing token returns `401 {"error", "need_token": true}`.
-- Up to 8 CourseWorks requests run at once per page load. On the real account the course list appears after about 0.8 s, due dates after about 2.7 s, and everything is done after about 5 s.
+- Up to 8 CourseWorks requests run at once per page load. If the browser leaves mid-load, the remaining CourseWorks requests are cancelled.
+- **Database:** one Postgres connection per running copy of the function, opened on first use and reused (`prepare: false`, so it also works through Supabase's connection pooler). Switching a reading between "dated" and "discussed" runs in one transaction. Row Level Security is on for both tables with no policies, so Supabase's public API (usable by anyone with the project's public key) can't read or change them; only the function's direct connection can.
 
 ### Token handling (security)
-- Each visitor pastes their own token. It is stored **only in that browser's `localStorage`** and sent in the `X-Canvas-Token` header.
-- On the server, the token exists **only inside a per-request `CanvasClient`**, which is closed when that request finishes. For `/api/data` that's when the stream ends or the browser disconnects.
-- The token is never passed on beyond CourseWorks: preview links are resolved on the server, and file downloads that CourseWorks forwards to its separate file-storage server go without the token.
-- **No globals, no cache (not even a hashed key), no logging.** The token is never written to disk. (The only file the app writes is `reading_deadlines.db`, which holds names and dates, not tokens.) Request logging is off, and `/docs` and the OpenAPI schema are disabled.
+- Each visitor pastes their own token. It is stored **only in that browser's `localStorage`** (on the GitHub Pages site) and sent in the `X-Canvas-Token` header over HTTPS.
+- On the server, the token exists **only inside a per-request `CanvasClient`**, which is dropped when that request finishes. For `/api/data` that's when the stream ends or the browser disconnects.
+- The token is never passed on beyond CourseWorks: preview links are resolved on the server, and file downloads that CourseWorks forwards to its separate file-storage server go without the token (redirects are followed by hand, and the token is only sent to CourseWorks itself).
+- **No globals, no cache, no logging.** The token is never written anywhere. Errors are logged by route name only. The database holds names and dates, never tokens.
+- Supabase's own login check is off for this function (`verify_jwt = false`); the CourseWorks token is the login.
 - **Log out** clears the token from localStorage and cancels any load that's still running.
 
 ### Materials sorting (slides / readings / recordings / other)
@@ -115,7 +147,7 @@ Sorting rules, in order:
 
 ### Assignment details
 - Details are fetched from the assignments, quizzes, discussion topics or pages endpoint, depending on the item type.
-- Descriptions are **sanitized with `nh3`**, which strips scripts, stylesheets, event handlers and `javascript:` links. Links open in a new tab with `rel="noopener noreferrer"`.
+- Descriptions are **sanitized with `sanitize-html`** (set up with the same allowed tags as the earlier Python version's `nh3`), which strips scripts, stylesheets, event handlers and `javascript:` links. Links open in a new tab with `rel="noopener noreferrer"`.
 - **Attached files:** Canvas file links in the description and discussion attachments get a direct download link (`/files/{id}/download?download_frd=1`, keeping the `verifier` parameter). The server also looks up each one's real name and type, so it can be previewed.
 - **Related course files:** matched in the browser by assignment number, leaving out files already attached. "HW02" matches `HW02.pdf` in the Assignments folder. "Homework 1" matches the "Homework 1" syllabus section (its PDF, Python file and data) but not Homework 2.
 
@@ -150,7 +182,7 @@ Anything that can be previewed opens underneath its title when clicked, instead 
 - **Instant (optimistic) updates:** a click shows its result right away (the reading moves into the due list, into "N discussed", etc.) while the change is saved in the background; saving takes a second or two because the server checks the reading with CourseWorks. If the server refuses or can't be reached, the reading goes back to what the server last saved and "Not saved: …" appears next to it. Changes to the same reading are sent one at a time, in the order they were clicked, so the server always ends up with the last one. When the server confirms, the page isn't redrawn, so anything opened in the meantime stays open.
 - **Who can change it:** anyone in the course can set, change or remove a date, and mark or unmark a reading as discussed. The page shows who made the current choice (hover for when).
 - **Due soon list:** readings with a date in the next `DAYS_AHEAD` days appear as "All day" items marked "Reading · date from Name". They aren't counted as "not yet submitted".
-- **Storage:** Postgres when `DATABASE_URL` is set, otherwise `reading_deadlines.db` (SQLite) next to `better_canvas.py`. Two tables, each with one row per reading (course id + reading link), created automatically on start:
+- **Storage:** the Supabase project's Postgres (or any Postgres set with `DATABASE_URL`); when running locally without one, `reading_deadlines.db` (SQLite) next to `dev.ts`. Two tables, each with one row per reading (course id + reading link), created by the migration and also automatically on first use:
   - `deadlines`: title, date, CourseWorks user id and name, time set.
   - `discussed_readings`: title, CourseWorks user id and name, time marked.
   Switching a reading between the two happens in one transaction. Removing a date or unmarking deletes the row. No history of edits is kept.
@@ -158,9 +190,9 @@ Anything that can be previewed opens underneath its title when clicked, instead 
   - The person's name comes from CourseWorks using their own token, so nobody can act under someone else's name.
   - Their token must be able to open the course, so they must be enrolled in it.
   - The link must be a reading in that course, found the same way the Slides & readings tab finds it. This also sets the title, so made-up entries can't appear in anyone's "Due soon".
-  - The date must be one of the 7 days starting today, by the date on the computer running the app. (The same 7-day limit is also set separately in `app.js`.)
+  - The date must be one of the 7 days starting today, by the date in `APP_TIMEZONE` (New York). (The same 7-day limit is also set separately in `app.js`, using the viewer's own date.)
   - A request can't carry both a date and `discussed`, and `discussed` must be true or false.
-- **Everyone must use the same server.** Dates are shared through the file on the computer running the app, so classmates need to open that computer's address (see `HOST`). A classmate running their own copy has their own separate file.
+- **Everyone shares one database.** On the published site, all classmates use the same Supabase database. A copy run locally with SQLite has its own separate dates.
 - Tested with a fake CourseWorks server and two users: every rule above, the day buttons, changing, removing, marking and unmarking as discussed from each place, the two users seeing each other's changes, the Due soon list, "Show more", a reading linked twice, a name containing HTML (shown as plain text), and the phone layout in dark mode.
 
 ### Frontend (`static/app.js`)
@@ -182,12 +214,13 @@ Anything that can be previewed opens underneath its title when clicked, instead 
 |---|---|
 | Network access | The cloud sandbox and the Mac's sandboxed shell were first blocked from CourseWorks. The user added `courseworks2.columbia.edu` to the allowed domains, and live tests then ran on the Mac. |
 | Hidden Files tabs | Canvas returns **401** for a course whose Files tab is hidden from students. Only a 401 on `/users/self/profile` means the token is bad. |
-| Calling the API from the browser | Checked and rejected: CourseWorks sends **no CORS headers** (the preflight returns 404). The user chose to keep the Python backend rather than build a Chrome extension. |
+| Calling the API from the browser | Checked and rejected: CourseWorks sends **no CORS headers** (the preflight returns 404). The user chose to keep a backend rather than build a Chrome extension. |
 | Token storage | Went from a token file (`~/.courseworks_token`), to user-supplied tokens in localStorage with a hashed server cache, to **request-scoped only** with no cache. |
 | Refresh button | Removed. Reloading the page fetches fresh data. |
 | "Change token" | Renamed to **Log out**. |
 | Streaming | Added so results show as soon as each part is ready, instead of after everything loads. |
 | Page files | HTML, CSS and JS moved out of the Python file into `static/`. |
+| Hosting | Supabase can't run a Python server, and its Edge Functions serve HTML as plain text without a custom domain. So the backend was rewritten as a TypeScript Edge Function (replacing the Python server), the page moved to GitHub Pages, and dates moved to the project's Postgres, reached with a direct SQL connection. The TypeScript version was checked against the Python one on the same fake CourseWorks: identical output for every event. |
 
 ## Testing done
 - Live runs against the real account: 8 due items, 6 classes and 10 other sites, with each class's slides, readings and recordings counted by hand.
@@ -196,17 +229,18 @@ Anything that can be previewed opens underneath its title when clicked, instead 
 - Stopping partway: closing the stream mid-load left the server healthy.
 - Reading due dates and "discussed in class", with a fake CourseWorks server and two users: all server checks (no/bad token, dates out of range, date and discussed together, non-readings, made-up links, courses the user isn't in), setting, changing, removing, marking and unmarking as discussed from Due soon and from Slides & readings, the Due soon list, and a name containing HTML.
 - Previews, with a fake CourseWorks server: PDF, Word/PowerPoint viewer, image, text, CourseWorks page, YouTube; unsafe page content removed; text containing HTML shown as text; files the user can't see; the token not sent to the file-storage server.
+- The TypeScript API (after replacing Python): same fake CourseWorks, run side by side with the Python server, gave identical `/api/data` output (only save times differed) and identical answers from every preview route; all the reading-date rules above; Postgres and SQLite storage; Row Level Security on; CORS preflight and `ALLOWED_ORIGINS`; the page served from one site calling the API on another (as on GitHub Pages + Supabase), including saving and a PDF preview; and the earlier browser tests (instant updates, click order, undo on failure). **Not yet run on Supabase itself**, only on Deno locally.
 - Wording, layout and colors were checked in light and dark mode, on desktop and phone widths.
 
 ## Known limitations / ideas
 - The first "Due soon" load waits on Canvas's planner endpoint, which takes about 2 s.
 - Images inside descriptions load from CourseWorks and need a CourseWorks login in the same browser.
 - Matching related files relies on numbered names such as "HW02" or "Homework 1", so assignments without numbers get no related files.
-- On the local network the app uses plain `http://`, so tokens travel unencrypted between the other device and this computer. That's fine on a trusted home network. On shared Wi-Fi (e.g. campus), use `HOST=127.0.0.1` or put the app behind HTTPS.
-- A Chrome extension would avoid CORS and the Python server entirely, using the CourseWorks login session instead of a token.
-- `tests/` still holds the early mock and screenshot scripts. They haven't been updated since, and the fake-CourseWorks tests described above aren't in the project.
+- When run locally and opened from another device, the app uses plain `http://`, so tokens travel unencrypted on the local network. That's fine on a trusted home network. On shared Wi-Fi (e.g. campus), use `HOST=127.0.0.1`, or use the published HTTPS site.
+- A Chrome extension would avoid CORS and the server entirely, using the CourseWorks login session instead of a token.
+- `tests/` still holds the early Python mock and screenshot scripts. They haven't been updated since, and the fake-CourseWorks tests described above aren't in the project.
 - Previews and reading due dates haven't been tried against the real CourseWorks yet. In particular, CourseWorks's document viewer may refuse to be shown inside another site.
-- Dates use the clock of the computer running the app. On a server set to UTC, "today" would switch over at 8 pm New York time.
+- The server's "today" is New York's (`APP_TIMEZONE`), while the day buttons use the viewer's own date. Someone in another time zone near midnight may see a button the server refuses.
 - The login screen links straight to `courseworks2.columbia.edu/profile/settings`, even if `CANVAS_BASE` points elsewhere.
 - Anyone in a course can change any reading's due date or mark any reading as discussed, and no history is kept, so a wrong or malicious change can't be traced back beyond the last person to make it. A discussed reading is still listed (under "N discussed" and on Slides & readings), so it can be undone.
 - A course with many readings (e.g. the whole semester's) will list them all under "Readings without a due date" until someone dates them or marks them as discussed. Past weeks' readings need to be marked once per course.

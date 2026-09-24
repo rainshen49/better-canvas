@@ -1,3 +1,10 @@
+# Local reading due dates (SQLite) and anything else local
+*.db
+.env
+node_modules/
+# Supabase CLI working files
+supabase/.temp/
+supabase/.branches/
+# Left over from the earlier Python version
 .venv/
 __pycache__/
-*.db
