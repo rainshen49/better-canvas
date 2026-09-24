@@ -9,9 +9,10 @@ It shows:
   2. Direct links to lecture slides, readings and recordings, by course and module.
      Files, pages and videos open as a preview right in the page.
   3. Reading due dates added by classmates. Anyone in a course can pick a due
-     date (one of the 7 days starting today) for one of its readings; everyone in that
+     date (one of the 7 days starting today) for one of its readings, or mark it
+     as discussed in class so it stops showing up as needing a date; everyone in that
      course then sees it. These are saved in reading_deadlines.db next to this
-     file, with the name of the person who set each date.
+     file, with the name of the person who made each change.
 
 Run (using the included .venv):
        .venv/bin/python better_canvas.py    → opens http://localhost:8765
@@ -256,10 +257,15 @@ def add_preview(entry, file_meta):
 # Reading due dates added by classmates
 # --------------------------------------------------------------------------- #
 class DeadlineStore:
-    """Reading due dates added by classmates.
+    """Reading due dates added by classmates, and readings they've marked as discussed in class.
 
     `deadlines` holds the latest date for each reading (one row per course and
     reading link) and who set it. Older dates aren't kept.
+
+    `discussed_readings` lists readings someone in the course marked as discussed
+    in class, so they don't need a due date, and who did it.
+    A reading is in at most one of the two tables: giving it a date unmarks
+    it, and marking it removes its date.
 
     Saved in Postgres when DATABASE_URL is set (needed on hosts like Heroku or
     Cloud Run, whose files are wiped on every deploy), otherwise in a SQLite
@@ -277,6 +283,15 @@ class DeadlineStore:
             set_by_id   BIGINT,            -- CourseWorks user id
             set_by_name TEXT    NOT NULL,
             set_at      TEXT    NOT NULL,  -- when it was set (UTC)
+            PRIMARY KEY (course_id, url)
+        )""",
+        """CREATE TABLE IF NOT EXISTS discussed_readings (
+            course_id   BIGINT  NOT NULL,
+            url         TEXT    NOT NULL,
+            title       TEXT    NOT NULL,
+            set_by_id   BIGINT,
+            set_by_name TEXT    NOT NULL,
+            set_at      TEXT    NOT NULL,  -- when it was marked (UTC)
             PRIMARY KEY (course_id, url)
         )""",
         # Earlier versions kept every change here; only the latest date is kept now.
@@ -306,13 +321,20 @@ class DeadlineStore:
 
     def _run(self, sql, params=(), fetch=False):
         """Run one statement (written with ? placeholders) and commit it."""
-        sql = sql.replace("?", self._mark)
+        return self._run_all([(sql, params)], fetch=fetch)
+
+    def _run_all(self, statements, fetch=False):
+        """Run several (sql, params) statements as one transaction: all of them
+        are saved, or none. With fetch=True, returns the last one's rows."""
+        statements = [(sql.replace("?", self._mark), params) for sql, params in statements]
         if self._pool is not None:
-            with self._pool.connection() as conn:  # commits on success, rolls back on error
-                cur = conn.execute(sql, params)
+            with self._pool.connection() as conn:  # one transaction: commits on success, rolls back on error
+                for sql, params in statements:
+                    cur = conn.execute(sql, params)
                 return cur.fetchall() if fetch else None
-        with self._lock, self._db:
-            cur = self._db.execute(sql, params)
+        with self._lock, self._db:  # commits on success, rolls back on error
+            for sql, params in statements:
+                cur = self._db.execute(sql, params)
             return cur.fetchall() if fetch else None
 
     def close(self):
@@ -330,6 +352,11 @@ class DeadlineStore:
         rows = self._run("SELECT * FROM deadlines WHERE course_id = ?", (course_id,), fetch=True)
         return {r["url"]: self._public(r) for r in rows}
 
+    def discussed_for_course(self, course_id):
+        """{reading link: {by, at, title}} for the readings marked as discussed in class in one course."""
+        rows = self._run("SELECT * FROM discussed_readings WHERE course_id = ?", (course_id,), fetch=True)
+        return {r["url"]: {"by": r["set_by_name"], "at": r["set_at"], "title": r["title"]} for r in rows}
+
     def between(self, course_ids, first, last):
         """Readings in these courses that are due from `first` to `last` (inclusive)."""
         if not course_ids:
@@ -341,19 +368,40 @@ class DeadlineStore:
         return [{**self._public(r), "course_id": r["course_id"], "url": r["url"]} for r in rows]
 
     def set(self, course_id, url, title, due_date, user_id, user_name):
-        """Save (or, when due_date is None, remove) a reading's due date. Returns the new value or None."""
+        """Save (or, when due_date is None, remove) a reading's due date. Giving it a
+        date also unmarks it as discussed. Returns the new value or None."""
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         if due_date is None:
             self._run("DELETE FROM deadlines WHERE course_id = ? AND url = ?", (course_id, url))
             return None
-        self._run(
-            """INSERT INTO deadlines (course_id, url, title, due_date, set_by_id, set_by_name, set_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT (course_id, url) DO UPDATE SET
-                   title = excluded.title, due_date = excluded.due_date, set_by_id = excluded.set_by_id,
-                   set_by_name = excluded.set_by_name, set_at = excluded.set_at""",
-            (course_id, url, title, due_date, user_id, user_name, now))
+        self._run_all([
+            ("DELETE FROM discussed_readings WHERE course_id = ? AND url = ?", (course_id, url)),
+            ("""INSERT INTO deadlines (course_id, url, title, due_date, set_by_id, set_by_name, set_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (course_id, url) DO UPDATE SET
+                    title = excluded.title, due_date = excluded.due_date, set_by_id = excluded.set_by_id,
+                    set_by_name = excluded.set_by_name, set_at = excluded.set_at""",
+             (course_id, url, title, due_date, user_id, user_name, now)),
+        ])
         return {"date": due_date, "by": user_name, "at": now, "title": title}
+
+    def set_discussed(self, course_id, url, title, discussed, user_id, user_name):
+        """Mark a reading as discussed in class for everyone in the course (which also
+        removes its due date), or unmark it. Returns the new value or None."""
+        if not discussed:
+            self._run("DELETE FROM discussed_readings WHERE course_id = ? AND url = ?", (course_id, url))
+            return None
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self._run_all([
+            ("DELETE FROM deadlines WHERE course_id = ? AND url = ?", (course_id, url)),
+            ("""INSERT INTO discussed_readings (course_id, url, title, set_by_id, set_by_name, set_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (course_id, url) DO UPDATE SET
+                    title = excluded.title, set_by_id = excluded.set_by_id,
+                    set_by_name = excluded.set_by_name, set_at = excluded.set_at""",
+             (course_id, url, title, user_id, user_name, now)),
+        ])
+        return {"by": user_name, "at": now, "title": title}
 
 
 DEADLINES = DeadlineStore(DATABASE_URL, DEADLINES_DB)
@@ -591,6 +639,7 @@ async def fetch_materials(cv, course):
         add_preview(entry, file_meta)
 
     deadlines = await asyncio.to_thread(DEADLINES.for_course, cid)
+    discussed = await asyncio.to_thread(DEADLINES.discussed_for_course, cid)
     return {
         "id": cid,
         "name": short_names(course)[1],
@@ -602,6 +651,7 @@ async def fetch_materials(cv, course):
         "files": loose,
         "files_accessible": files is not None,
         "deadlines": deadlines,
+        "discussed": discussed,
     }
 
 
@@ -794,7 +844,10 @@ def _all_entries(materials):
 
 @app.post("/api/reading-deadline")
 async def set_reading_deadline(request: Request, x_canvas_token: Optional[str] = Header(default=None)):
-    """Set or remove a reading's due date. Body: {"course_id", "url", "date": "YYYY-MM-DD" or null}.
+    """Set or remove a reading's due date, or mark it as discussed in class for everyone in the course.
+    Body: {"course_id", "url", "date": "YYYY-MM-DD" or null} to set or remove the date,
+    or {"course_id", "url", "discussed": true or false} to mark or unmark it as discussed in class.
+    Answers with the reading's new state: {"deadline": … or null, "discussed": … or null}.
 
     The person's name comes from CourseWorks (not from the page), and the
     reading must really be a reading in a course they're in, so nobody can
@@ -810,9 +863,13 @@ async def set_reading_deadline(request: Request, x_canvas_token: Optional[str] =
         body = await request.json()
     except ValueError:
         return refuse("The request wasn't readable.")
-    course_id, url, day = body.get("course_id"), body.get("url"), body.get("date")
+    if not isinstance(body, dict):
+        return refuse("The request wasn't readable.")
+    course_id, url, day, discuss = body.get("course_id"), body.get("url"), body.get("date"), body.get("discussed")
     if not isinstance(course_id, int) or not isinstance(url, str) or not url:
         return refuse("Missing course or reading.")
+    if discuss is not None and (not isinstance(discuss, bool) or day is not None):
+        return refuse("Send either a date or discussed, not both.")
     if day is not None:
         try:
             due = date.fromisoformat(day)
@@ -844,9 +901,17 @@ async def set_reading_deadline(request: Request, x_canvas_token: Optional[str] =
     if not reading:
         return refuse("That reading wasn't found in this course.", 404)
 
-    saved = await asyncio.to_thread(DEADLINES.set, course_id, url, reading["title"], day,
-                                    me.get("id"), me.get("name") or me.get("short_name") or "A classmate")
-    return JSONResponse({"deadline": saved}, headers=NO_STORE)
+    name = me.get("name") or me.get("short_name") or "A classmate"
+    if discuss is None:
+        deadline = await asyncio.to_thread(DEADLINES.set, course_id, url, reading["title"], day, me.get("id"), name)
+        # Setting a date unmarks the reading as discussed; removing one leaves it unmarked.
+        discussed = None
+    else:
+        discussed = await asyncio.to_thread(DEADLINES.set_discussed, course_id, url, reading["title"], discuss,
+                                          me.get("id"), name)
+        # Marking it as discussed removes the date; unmarking leaves the reading without one.
+        deadline = None
+    return JSONResponse({"deadline": deadline, "discussed": discussed}, headers=NO_STORE)
 
 
 # --------------------------------------------------------------------------- #

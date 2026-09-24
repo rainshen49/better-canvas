@@ -206,6 +206,26 @@ nav button.on {
    around. It's hidden only on the login screen.
    ========================================================================== */
 
+/* The progress bar and the note share one spot: both sit in the same grid cell,
+   so the box is as tall as the taller of the two and never changes size.
+   The one not in use is hidden with visibility (not display), keeping its space. */
+.topslot {
+  display: grid;
+  margin-bottom: 18px;
+}
+
+.topslot > * {
+  grid-area: 1 / 1;
+  margin: 0;
+  transition: opacity 0.3s, visibility 0.3s;
+}
+
+.topslot.show-note > .loadbar,
+.topslot:not(.show-note) > .note {
+  visibility: hidden;
+  opacity: 0;
+}
+
 .loadbar {
   display: grid;
   grid-template-columns: 1fr;
@@ -213,8 +233,7 @@ nav button.on {
   column-gap: 12px;
   row-gap: 10px;
   align-items: center;
-  height: 68px;
-  margin-bottom: 18px;
+  min-height: 68px;
   padding: 14px 18px;
   border: 1px solid var(--acc);
   border-radius: 12px;
@@ -349,13 +368,27 @@ nav button.on {
 
 /* Note that reading due dates come from classmates */
 .note {
-  margin-bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center; /* centered in the box, which is as tall as the progress bar */
+  column-gap: 0.35em;
   padding: 10px 14px;
   border: 1px solid var(--amber);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--amberbg);
   color: var(--amber);
   font-size: 13.5px;
+}
+
+.note a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.note a:hover {
+  text-decoration-thickness: 2px;
 }
 
 .day {
@@ -578,16 +611,6 @@ ul.files .ctx {
   font-size: 12px;
 }
 
-.dlbtn {
-  margin-left: auto;
-  padding: 3px 10px;
-  border: 1px solid var(--acc);
-  border-radius: 99px;
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 .openlink {
   display: inline-block;
   margin-top: 14px;
@@ -808,10 +831,50 @@ ul.mat a:hover {
   font-style: italic;
 }
 
-.dl {
+/* Download icon, with a "Download" tip on hover or keyboard focus */
+li a.dl {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   margin-left: auto;
+  border-radius: 6px;
   color: var(--mute);
+}
+
+li a.dl:hover,
+li a.dl:focus-visible {
+  background: var(--accbg);
+  color: var(--acc);
+}
+
+/* The tip sits to the left of the icon, so the edge of a card can't cut it off */
+li a.dl::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 6px);
+  z-index: 3;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--card);
   font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.12s;
+}
+
+li a.dl:hover::after,
+li a.dl:focus-visible::after {
+  opacity: 1;
+  transition-delay: 0.15s;
 }
 
 /* Title of anything that opens a preview underneath */
@@ -972,6 +1035,128 @@ ul.mat a:hover {
 
 .rdue-err {
   color: var(--warn);
+}
+
+.rdue-err:empty {
+  display: none;
+}
+
+.rdue-val.discussed {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* The due date controls inside an expanded reading on the Due soon tab */
+.rdue-line {
+  display: flex;
+  margin-top: 8px;
+}
+
+.rdue-line .rdue {
+  margin-left: 0;
+}
+
+/* ==========================================================================
+   "Readings without a due date" (bottom of the Due soon tab)
+   ========================================================================== */
+
+.undated-h {
+  margin: 28px 0 10px;
+  color: var(--mute);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* One card per class */
+.ucourse {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  animation: fadein 0.35s ease;
+}
+
+.uhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-weight: 650;
+}
+
+ul.ulist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+ul.ulist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+ul.ulist li:last-child {
+  border-bottom: 0;
+}
+
+ul.ulist a {
+  color: var(--acc);
+  text-decoration: none;
+}
+
+ul.ulist a:hover {
+  text-decoration: underline;
+}
+
+/* Module or folder the reading is in */
+ul.ulist .ctx {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+/* Readings past the first few stay hidden until "Show all" */
+.ucourse:not(.show-all) li.extra {
+  display: none;
+}
+
+.umore {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--acc);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.umore:hover {
+  text-decoration: underline;
+}
+
+.uall {
+  margin: 4px 0;
+}
+
+details.udiscussed {
+  margin-top: 8px;
+  color: var(--mute);
+  font-size: 13px;
+}
+
+details.udiscussed > summary {
+  cursor: pointer;
+}
+
+details.udiscussed ul.ulist li {
+  opacity: 0.75;
 }
 
 /* ==========================================================================

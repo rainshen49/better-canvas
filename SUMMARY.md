@@ -2,9 +2,9 @@
 
 A small web app for Columbia CourseWorks (Canvas) that shows:
 
-1. **Due soon:** everything due in the next 14 days across all active classes, plus readings that classmates have given a due date. Each item expands to show its full description, key facts, attached files (with previews) and related course files.
+1. **Due soon:** everything due in the next 14 days across all active classes, plus readings that classmates have given a due date. Each item expands to show its full description, key facts, attached files (with previews) and related course files. Below that, **Readings without a due date** lists, class by class, every reading nobody has dated or marked as discussed in class yet, so they can be dated right there.
 2. **Slides & readings:** lecture slides, readings and recordings, organized by course. Clicking a file, page or video opens a preview right in the page.
-3. **Reading due dates from classmates:** anyone can pick a due date (one of the 7 days starting today) for a reading. Everyone in that course then sees it, both next to the reading and in "Due soon", along with the name of the person who set it.
+3. **Reading due dates from classmates:** anyone can pick a due date (one of the 7 days starting today) for a reading, or mark it as **discussed** in class so it no longer needs one. Everyone in that course then sees it, both next to the reading and in "Due soon", along with the name of the person who set it.
 
 ---
 
@@ -78,13 +78,13 @@ canvas/
 - **FastAPI + httpx (async).** Routes:
   - `GET /` serves `static/index.html`, and `/static/*` serves the assets
   - `GET /api/data` streams everything the page shows (below)
-  - `POST /api/reading-deadline` sets or removes a reading's due date
+  - `POST /api/reading-deadline` sets or removes a reading's due date, or marks / unmarks a reading as discussed in class
   - `GET /api/file-preview`, `GET /api/file-content` and `GET /api/page` power the previews
 - **Streaming response (NDJSON)** from `/api/data`. Events arrive in completion order:
   - `start`: user name plus the course list, which the browser shows as loading placeholders right away
   - `due`: due items for the next `DAYS_AHEAD` days (from `/api/v1/planner/items`, falling back to per-course assignments if the planner can't be read), plus readings classmates have dated
   - `due_detail`: full details for each due item (description, points, attempts, time limit, open/close dates, files)
-  - `course`: one per course, with its modules, syllabus links, loose files, quick-link tabs, reading due dates, and how each item can be previewed
+  - `course`: one per course, with its modules, syllabus links, loose files, quick-link tabs, reading due dates, readings discussed in class, and how each item can be previewed
   - `course_error` / `due_error`: per-item failures that don't stop the rest
   - `done`
 - **Token validation happens before streaming**, so a bad or missing token returns `401 {"error", "need_token": true}`.
@@ -141,24 +141,36 @@ Anything that can be previewed opens underneath its title when clicked, instead 
 - On iPhone and iPad, a PDF inside the page may only show its first page. Use "Open full screen" there.
 
 ### Reading due dates from classmates
-- **Where:** on the Slides & readings tab, every item sorted as a **reading** has a "+ Due date" button. It opens a row of 7 day buttons (Today, Tomorrow, then e.g. "Sat 26"), and one click saves the date. Once set, the reading shows "📅 Due Wed, Sep 30 · Name" with a **Change** button, which also offers **Remove**. Past dates stay visible as "Was due…".
-- **Who can change it:** anyone in the course can change or remove a date. The page shows who set the current one.
-- **Due soon:** readings with a date in the next `DAYS_AHEAD` days appear in the list as "All day" items marked "Reading · date from Name". They update right away when you change a date, and they aren't counted as "not yet submitted".
-- **Storage:** Postgres when `DATABASE_URL` is set, otherwise `reading_deadlines.db` (SQLite) next to `better_canvas.py`. The `deadlines` table holds only the latest date per reading (course id + reading link, title, date, CourseWorks user id and name, time set). Changing a date replaces it, and removing one deletes the row. No history of edits is kept.
-- **Checks on the server (`POST /api/reading-deadline`):**
-  - The person's name comes from CourseWorks using their own token, so nobody can add a date under someone else's name.
+- **Three states, shared by the whole course:** every reading either has a due date, is marked **discussed** in class (so it doesn't need a date), or has neither. Giving a discussed reading a date unmarks it, and marking a dated reading as discussed removes its date.
+- **Where the controls are.** The same controls appear in three places and stay in sync (changing one updates the others right away):
+  - **Due soon → Readings without a due date** (bottom of the tab). One card per class (not "Other sites"), in the same order as the Slides & readings tab, listing its readings that have no date and aren't discussed in class, with the module or folder each is in. Each reading can be previewed and has **+ Due date** and **✓ Discussed** buttons. The first 5 show, with "Show N more" for the rest. Each card also has a collapsed "N discussed" list with an **Undo** button per reading. A reading linked from two places (e.g. two modules) is listed once. Cards appear as each class loads.
+  - **Due soon → a dated reading, expanded:** shows who set the date, and **Change** (the day buttons, plus Remove and ✓ Discussed).
+  - **Slides & readings:** next to every reading, as before, plus **✓ Discussed** / "✓ Discussed · Name" with **Undo**.
+- **Picking a date:** a row of 7 day buttons (Today, Tomorrow, then e.g. "Sat 26"); one click saves. Once set, the reading shows "📅 Due Wed, Sep 30 · Name". Past dates stay visible as "Was due…".
+- **Instant (optimistic) updates:** a click shows its result right away (the reading moves into the due list, into "N discussed", etc.) while the change is saved in the background; saving takes a second or two because the server checks the reading with CourseWorks. If the server refuses or can't be reached, the reading goes back to what the server last saved and "Not saved: …" appears next to it. Changes to the same reading are sent one at a time, in the order they were clicked, so the server always ends up with the last one. When the server confirms, the page isn't redrawn, so anything opened in the meantime stays open.
+- **Who can change it:** anyone in the course can set, change or remove a date, and mark or unmark a reading as discussed. The page shows who made the current choice (hover for when).
+- **Due soon list:** readings with a date in the next `DAYS_AHEAD` days appear as "All day" items marked "Reading · date from Name". They aren't counted as "not yet submitted".
+- **Storage:** Postgres when `DATABASE_URL` is set, otherwise `reading_deadlines.db` (SQLite) next to `better_canvas.py`. Two tables, each with one row per reading (course id + reading link), created automatically on start:
+  - `deadlines`: title, date, CourseWorks user id and name, time set.
+  - `discussed_readings`: title, CourseWorks user id and name, time marked.
+  Switching a reading between the two happens in one transaction. Removing a date or unmarking deletes the row. No history of edits is kept.
+- **The API (`POST /api/reading-deadline`):** body `{"course_id", "url", "date": "YYYY-MM-DD" or null}` to set or remove a date, or `{"course_id", "url", "discussed": true or false}`. It answers with the reading's new state: `{"deadline": … or null, "discussed": … or null}`. Checks:
+  - The person's name comes from CourseWorks using their own token, so nobody can act under someone else's name.
   - Their token must be able to open the course, so they must be enrolled in it.
   - The link must be a reading in that course, found the same way the Slides & readings tab finds it. This also sets the title, so made-up entries can't appear in anyone's "Due soon".
   - The date must be one of the 7 days starting today, by the date on the computer running the app. (The same 7-day limit is also set separately in `app.js`.)
+  - A request can't carry both a date and `discussed`, and `discussed` must be true or false.
 - **Everyone must use the same server.** Dates are shared through the file on the computer running the app, so classmates need to open that computer's address (see `HOST`). A classmate running their own copy has their own separate file.
-- Tested with a fake CourseWorks server and two users: every rule above, the day buttons, changing, removing, the Due soon list, and a name containing HTML (shown as plain text).
+- Tested with a fake CourseWorks server and two users: every rule above, the day buttons, changing, removing, marking and unmarking as discussed from each place, the two users seeing each other's changes, the Due soon list, "Show more", a reading linked twice, a name containing HTML (shown as plain text), and the phone layout in dark mode.
 
 ### Frontend (`static/app.js`)
 - Reads the stream with `fetch().body.getReader()` and updates the page as each event arrives.
-- **Status bar:** a fixed-height slot (68 px) that keeps its place from the first update to the last, so the content below it never shifts. It's hidden only on the login screen. It shows "N of M ready" and a progress bar while loading, then a quiet ✓ "All N courses loaded" when done, or ✕ on failure.
+- **Top box (status + note):** one box at the top of both tabs, hidden only on the login screen. While loading it shows "N of M ready" and a progress bar. When everything has loaded, on Due soon it turns into the note about reading due dates; on Slides & readings it shows a quiet ✓ "All N courses loaded". If loading fails it shows ✕ on both tabs. The progress bar and the note are stacked in the same spot (same grid cell, the unused one hidden with `visibility`), so the box is always as tall as the taller of the two and the content below never shifts.
 - Placeholder cards with spinners are replaced by the real cards as each course arrives. Before the first results arrive, the status bar is the only loading indicator (there are no separate "Loading due dates…" / "Loading your courses…" blocks).
 - `app.js` and `style.css` are organized into commented sections (helpers, tabs, dates, due list, details, materials, previews, reading due dates, filters, login, status bar, updates from the server, loading) and use clear, descriptive names.
 - Filters (All / Slides / Readings / Recordings / Other), a title search, and Expand/Collapse all.
+- Download links are a small download icon; hovering over it (or tabbing to it) shows a "Download" tip, and screen readers read it as "Download".
+- The note (in the top box on Due soon) is one line: "⚠️ Reading due dates come from classmates. Contribute below". "Contribute below" is a link that smoothly scrolls down to "Readings without a due date", stopping just below the sticky header.
 - Hidden courses (`IGNORE_COURSES`) never appear. Remaining non-class sites are in a collapsed "Other sites (orientation, career…)" section.
 - The selected tab is remembered in localStorage. Dark mode follows the system setting, and the layout works on phones.
 
@@ -182,7 +194,7 @@ Anything that can be previewed opens underneath its title when clicked, instead 
 - Token flow: no token, a bad token, a good token, and two different tokens at the same time (each handled correctly).
 - Browser tests with mock servers: first-visit prompt, bad-token error, reload using the saved token, log out, streaming with placeholders, layout shift (content stayed at the same position on desktop and phone), and expanding items including an XSS test (no script ran and nothing unsafe survived).
 - Stopping partway: closing the stream mid-load left the server healthy.
-- Reading due dates, with a fake CourseWorks server and two users: all server checks (no/bad token, dates out of range, non-readings, made-up links, courses the user isn't in), setting, changing and removing, the day buttons, the Due soon list, and a name containing HTML.
+- Reading due dates and "discussed in class", with a fake CourseWorks server and two users: all server checks (no/bad token, dates out of range, date and discussed together, non-readings, made-up links, courses the user isn't in), setting, changing, removing, marking and unmarking as discussed from Due soon and from Slides & readings, the Due soon list, and a name containing HTML.
 - Previews, with a fake CourseWorks server: PDF, Word/PowerPoint viewer, image, text, CourseWorks page, YouTube; unsafe page content removed; text containing HTML shown as text; files the user can't see; the token not sent to the file-storage server.
 - Wording, layout and colors were checked in light and dark mode, on desktop and phone widths.
 
@@ -196,5 +208,6 @@ Anything that can be previewed opens underneath its title when clicked, instead 
 - Previews and reading due dates haven't been tried against the real CourseWorks yet. In particular, CourseWorks's document viewer may refuse to be shown inside another site.
 - Dates use the clock of the computer running the app. On a server set to UTC, "today" would switch over at 8 pm New York time.
 - The login screen links straight to `courseworks2.columbia.edu/profile/settings`, even if `CANVAS_BASE` points elsewhere.
-- Anyone in a course can change any reading's due date, and no history is kept, so a wrong or malicious change can't be traced back beyond the last person to set it.
+- Anyone in a course can change any reading's due date or mark any reading as discussed, and no history is kept, so a wrong or malicious change can't be traced back beyond the last person to make it. A discussed reading is still listed (under "N discussed" and on Slides & readings), so it can be undone.
+- A course with many readings (e.g. the whole semester's) will list them all under "Readings without a due date" until someone dates them or marks them as discussed. Past weeks' readings need to be marked once per course.
 - **Security reminder:** the personal token used during development was pasted into a chat. Revoke it in CourseWorks and create a new one.

@@ -57,7 +57,11 @@ let currentRequest = null;
 
 const TAB_STORAGE_KEY = "cw-tab";
 
+let currentTab = "due";
+
 function showTab(which) {
+  currentTab = which;
+  updateTopSlot();
   for (const tab of ["due", "mat"]) {
     $("#" + tab).classList.toggle("hidden", tab !== which);
     $("#tab-" + tab).classList.toggle("on", tab === which);
@@ -167,20 +171,26 @@ function dayGroupHtml(items) {
     </div>`;
 }
 
-// Shown at the top of the "Due soon" tab: reading due dates in the list come
-// from classmates, not from CourseWorks.
-const READINGS_WARNING = `
-  <div class="note" role="note">
-    ⚠️ <b>Reading due dates come from classmates.</b> You can contribute on the
-    Slides &amp; readings tab.
-  </div>`;
+/** Scroll smoothly to "Readings without a due date", stopping just below the sticky header. */
+function scrollToUndated() {
+  const heading = $(".undated-h:not(.hidden)") || $("#undated");
+  const headerHeight = $("header").offsetHeight;
+  const top = heading.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+  window.scrollTo({ top, behavior: "smooth" });
+}
+
+// The "Contribute below" link in the note at the top. The note is in index.html.
+$("#readnote").addEventListener("click", (event) => {
+  if (!event.target.closest(".jump-undated")) return;
+  event.preventDefault();
+  scrollToUndated();
+});
 
 function renderDue() {
-  const container = $("#due");
+  const container = $("#due-list");
   const items = DATA.due;
   if (!items.length) {
-    container.innerHTML =
-      READINGS_WARNING + `<div class="empty">Nothing due in the next ${DATA.days} days 🎉</div>`;
+    container.innerHTML = `<div class="empty">Nothing due in the next ${DATA.days} days 🎉</div>`;
     return;
   }
 
@@ -195,7 +205,6 @@ function renderDue() {
   const notSubmitted = items.filter((item) => !item.submitted && item.type !== "reading").length;
 
   container.innerHTML = `
-    ${READINGS_WARNING}
     <p class="sub due-summary">
       ${items.length} items due in the next ${DATA.days} days ·
       <b>${notSubmitted}</b> not yet submitted · click an item for details
@@ -253,14 +262,7 @@ function relatedFiles(item, excludeUrls) {
   const course = DATA.mats[item.course_id];
   if (!course) return null;
 
-  const moduleItems = course.modules.flatMap((module) =>
-    module.items
-      .filter((entry) => entry.kind === "item")
-      .map((entry) => ({ ...entry, ctx: module.name })),
-  );
-  const looseFiles = course.files.map((file) => ({ ...file, ctx: file.folder }));
-
-  return [...moduleItems, ...looseFiles].filter(
+  return courseEntries(course).filter(
     (entry) =>
       (entry.type === "File" || entry.type === "Link") &&
       !excludeUrls.has(entry.url) &&
@@ -287,8 +289,16 @@ function detailChips(detail) {
   ].filter(Boolean);
 }
 
+// A download arrow, drawn in the text color.
+const DOWNLOAD_ICON = `
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
+    stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" />
+  </svg>`;
+
+/** A download icon that says "Download" on hover (and to screen readers). Nothing if there's no link. */
 const downloadButton = (url) =>
-  url ? `<a class="dlbtn" href="${esc(url)}">⬇ Download</a>` : "";
+  url ? `<a class="dl" href="${esc(url)}" aria-label="Download" data-tip="Download">${DOWNLOAD_ICON}</a>` : "";
 
 function attachedFileHtml(file) {
   const entry = { file_id: file.id, title: file.name, url: file.url, preview: file.preview };
@@ -320,10 +330,8 @@ function fillDetail(key) {
 
   if (item.type === "reading") {
     body.innerHTML = `
-      <p class="sub">
-        Due date added by ${esc(item.added_by)} on ${formatDateTime(item.added_at)}.
-        You can change it on the Slides &amp; readings tab.
-      </p>
+      <p class="sub">Due date added by ${esc(item.added_by)} on ${formatDateTime(item.added_at)}.</p>
+      <div class="rdue-line">${readingDueBoxHtml(item.course_id, item.url)}</div>
       ${externalLink(item.url, "Open reading ↗", "openlink")}`;
     return;
   }
@@ -378,17 +386,11 @@ function refreshOpenDetails() {
 /** One file or link in a course. data-t holds the text the search box looks through (title and folder). */
 function materialHtml(entry, courseId) {
   const searchText = (entry.title + " " + (entry.folder || "")).toLowerCase();
-  const download = entry.download
-    ? `<a class="dl" href="${esc(entry.download)}">download</a>`
-    : "";
-  const dueDate =
-    entry.cat === "reading"
-      ? `<span class="rdue" data-cid="${courseId}" data-url="${esc(entry.url)}">${readingDueHtml(courseId, entry.url)}</span>`
-      : "";
+  const dueDate = entry.cat === "reading" ? readingDueBoxHtml(courseId, entry.url) : "";
   return `
     <li data-cat="${entry.cat}" data-t="${esc(searchText)}">
       <span class="ic">${CATEGORY_ICONS[entry.cat]}</span>
-      ${fileTitleHtml(entry)}${dueDate}${download}${previewPanelHtml(entry, courseId)}
+      ${fileTitleHtml(entry)}${dueDate}${downloadButton(entry.download)}${previewPanelHtml(entry, courseId)}
     </li>`;
 }
 
@@ -433,11 +435,20 @@ function courseTitleHtml(course) {
   return esc(course.name) + code;
 }
 
-function courseCardHtml(course, open) {
-  const allItems = [
-    ...course.modules.flatMap((module) => module.items.filter((entry) => entry.kind === "item")),
-    ...course.files,
+/** Every file and link in a course, each with `ctx`: the module or folder it's in. */
+function courseEntries(course) {
+  return [
+    ...course.modules.flatMap((module) =>
+      module.items
+        .filter((entry) => entry.kind === "item")
+        .map((entry) => ({ ...entry, ctx: module.name })),
+    ),
+    ...course.files.map((file) => ({ ...file, ctx: file.folder })),
   ];
+}
+
+function courseCardHtml(course, open) {
+  const allItems = courseEntries(course);
   const count = (category) => allItems.filter((entry) => entry.cat === category).length;
 
   let body = course.modules.map((module) => moduleHtml(module, course.id)).join("");
@@ -502,6 +513,7 @@ function placeCourse(course) {
   placeholder.outerHTML = courseCardHtml({ ...listing, ...course }, !!listing.is_class);
   applyFilter();
   refreshOpenDetails();
+  renderUndatedCourse(course.id);
 }
 
 function markCourseFailed(id, message) {
@@ -677,21 +689,52 @@ for (const tab of ["#courses", "#due"]) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Reading due dates added by classmates
+// Reading due dates and readings discussed in class (shared by everyone in a course)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The due date shown next to a reading, or a button to add one. */
+// A reading is in one of three states, shared by everyone in its course:
+//   - it has a due date (DATA.mats[course].deadlines[url]),
+//   - it's been discussed in class, so it needs no date (DATA.mats[course].discussed[url]),
+//   - or neither, so it's listed under "Readings without a due date" on the Due soon tab.
+// Giving a discussed reading a date unmarks it, and marking a reading as discussed removes its date.
+
+const readingDeadline = (courseId, url) => DATA.mats[courseId]?.deadlines?.[url];
+const readingDiscussed = (courseId, url) => DATA.mats[courseId]?.discussed?.[url];
+
+/** The box holding a reading's due date and its buttons. The same reading can have a box on both tabs. */
+function readingDueBoxHtml(courseId, url) {
+  return `<span class="rdue" data-cid="${courseId}" data-url="${esc(url)}">${readingDueHtml(courseId, url)}</span>`;
+}
+
+/** What's inside the box: the due date (or "Discussed") and buttons to change it. */
 function readingDueHtml(courseId, url) {
-  const deadline = DATA.mats[courseId]?.deadlines?.[url];
-  if (!deadline) return `<button class="rdue-btn" data-act="edit">+ Due date</button>`;
+  const errorSlot = `<span class="rdue-err" role="alert"></span>`;
+
+  const discussed = readingDiscussed(courseId, url);
+  if (discussed) {
+    return `
+      <span class="rdue-val discussed" title="Marked by ${esc(discussed.by)} on ${formatDateTime(discussed.at)}">
+        ✓ Discussed · ${esc(discussed.by)}
+      </span>
+      <button class="rdue-btn" data-act="undiscuss" title="Not discussed after all: list it again as needing a due date, for everyone in the course">Undo</button>
+      ${errorSlot}`;
+  }
+
+  const deadline = readingDeadline(courseId, url);
+  if (!deadline) {
+    return `
+      <button class="rdue-btn" data-act="edit">+ Due date</button>
+      <button class="rdue-btn" data-act="discuss" title="Already discussed in class, so it doesn't need a due date. Applies to everyone in the course">✓ Discussed</button>
+      ${errorSlot}`;
+  }
 
   const past = deadline.date < dayFromToday(0);
-  const addedOn = formatDateTime(deadline.at);
   return `
-    <span class="rdue-val ${past ? "past" : ""}" title="Added by ${esc(deadline.by)} on ${addedOn}">
+    <span class="rdue-val ${past ? "past" : ""}" title="Added by ${esc(deadline.by)} on ${formatDateTime(deadline.at)}">
       📅 ${past ? "Was due" : "Due"} ${formatShortDay(deadline.date)} · ${esc(deadline.by)}
     </span>
-    <button class="rdue-btn" data-act="edit">Change</button>`;
+    <button class="rdue-btn" data-act="edit">Change</button>
+    ${errorSlot}`;
 }
 
 /** Label for a day button: "Today", "Tomorrow", then e.g. "Sat 26". */
@@ -704,7 +747,7 @@ function dayButtonLabel(offset, day) {
 
 /** Swap the due date for a row of buttons, one per day. One click saves. */
 function openDueEditor(box) {
-  const deadline = DATA.mats[box.dataset.cid]?.deadlines?.[box.dataset.url];
+  const deadline = readingDeadline(box.dataset.cid, box.dataset.url);
   const dayButtons = [];
   for (let offset = 0; offset < PICK_DAYS; offset++) {
     const day = dayFromToday(offset);
@@ -717,6 +760,7 @@ function openDueEditor(box) {
   box.innerHTML = `
     <span class="rdue-days" role="group" aria-label="Pick a due date">${dayButtons.join("")}</span>
     ${deadline ? `<button class="rdue-btn" data-act="remove">Remove</button>` : ""}
+    ${deadline ? `<button class="rdue-btn" data-act="discuss" title="Remove the date and mark it as discussed in class, for everyone in the course">✓ Discussed</button>` : ""}
     <button class="rdue-btn" data-act="cancel">Cancel</button>
     <span class="rdue-err" role="alert"></span>`;
   box.querySelector(".rdue-day").focus();
@@ -726,44 +770,135 @@ function closeDueEditor(box) {
   box.innerHTML = readingDueHtml(Number(box.dataset.cid), box.dataset.url);
 }
 
-/** Send a new due date (or null to remove it) to the server, then update the page. */
-async function saveDueDate(box, day) {
-  const courseId = Number(box.dataset.cid);
-  const url = box.dataset.url;
-  const showError = (message) => (box.querySelector(".rdue-err").textContent = message);
+/** Put a reading's state ({deadline, discussed}, each null if not set) into DATA and redraw it everywhere. */
+function applyReadingState(courseId, url, state) {
+  const course = DATA.mats[courseId];
+  course.deadlines ??= {};
+  course.discussed ??= {};
+  if (state.deadline) course.deadlines[url] = state.deadline;
+  else delete course.deadlines[url];
+  if (state.discussed) course.discussed[url] = state.discussed;
+  else delete course.discussed[url];
 
-  if (day !== null && !(day >= dayFromToday(0) && day <= dayFromToday(PICK_DAYS - 1))) {
-    return showError(`Pick a date within the next ${PICK_DAYS} days.`);
-  }
-  for (const button of box.querySelectorAll("button")) button.disabled = true;
-  showError("");
+  for (const box of readingBoxes(courseId, url)) closeDueEditor(box);
+  updateDueListReading(courseId, url, state.deadline);
+  renderUndatedCourse(courseId);
+}
 
-  let result;
+/** Every box on the page (on either tab) showing this reading's due date. */
+function readingBoxes(courseId, url) {
+  return $$(".rdue").filter((box) => Number(box.dataset.cid) === courseId && box.dataset.url === url);
+}
+
+/** A reading's title, from the course's files and links. */
+function readingTitle(courseId, url) {
+  const course = DATA.mats[courseId];
+  return (
+    course.deadlines?.[url]?.title ||
+    course.discussed?.[url]?.title ||
+    courseEntries(course).find((entry) => entry.url === url)?.title ||
+    ""
+  );
+}
+
+// Per reading (keyed by course id and link):
+//   saveQueue:  the save in progress. Saves for the same reading are sent one at a
+//               time, in the order they were clicked, so the server ends up with the last one.
+//   latestSave: a number for the most recent click, so only that one updates the page.
+//   savedState: the reading's state as the server last confirmed it, to go back to if a save fails.
+const saveQueue = {};
+const latestSave = {};
+const savedState = {};
+
+/** Send one change to the server. Always returns an object: the saved state, or {error}. */
+async function sendReadingChange(courseId, url, change) {
   try {
     const response = await fetch("/api/reading-deadline", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Canvas-Token": getToken() },
-      body: JSON.stringify({ course_id: courseId, url, date: day }),
+      body: JSON.stringify({ course_id: courseId, url, ...change }),
     });
-    result = await response.json().catch(() => ({ error: "HTTP " + response.status }));
+    return await response.json().catch(() => ({ error: "HTTP " + response.status }));
   } catch (e) {
-    result = { error: "Couldn't reach the server." };
+    return { error: "Couldn't reach the server." };
   }
+}
+
+/**
+ * Change a reading's state. The page updates right away (an "optimistic
+ * update"), and the change is saved in the background. If the server refuses
+ * it, the reading goes back to what the server last saved, and the error shows next to it.
+ * `change` is one of {date: "YYYY-MM-DD"}, {date: null} (remove the date),
+ * {discussed: true} or {discussed: false}.
+ */
+async function saveReading(box, change) {
+  const courseId = Number(box.dataset.cid);
+  const url = box.dataset.url;
+
+  const day = change.date;
+  if (day && !(day >= dayFromToday(0) && day <= dayFromToday(PICK_DAYS - 1))) {
+    const slot = box.querySelector(".rdue-err");
+    if (slot) slot.textContent = `Pick a date within the next ${PICK_DAYS} days.`;
+    return;
+  }
+
+  // Remember what the server has (unless a save is already under way), then
+  // show the change straight away.
+  const key = `${courseId} ${url}`;
+  savedState[key] ??= {
+    deadline: readingDeadline(courseId, url) || null,
+    discussed: readingDiscussed(courseId, url) || null,
+  };
+  const me = { by: DATA.user || "You", at: new Date().toISOString(), title: readingTitle(courseId, url) };
+  let expected;
+  if ("discussed" in change) {
+    expected = { deadline: null, discussed: change.discussed ? me : null };
+  } else {
+    // Removing a date leaves the reading not discussed; setting one un-marks it.
+    expected = { deadline: day ? { ...me, date: day } : null, discussed: null };
+  }
+  applyReadingState(courseId, url, expected);
+
+  const thisSave = (latestSave[key] = (latestSave[key] || 0) + 1);
+  const request = (saveQueue[key] || Promise.resolve()).then(() => sendReadingChange(courseId, url, change));
+  saveQueue[key] = request;
+  const result = await request;
+
   if (result.need_token) {
     setToken("");
     return showAuth(result.error);
   }
-  if (result.error) {
-    for (const button of box.querySelectorAll("button")) button.disabled = false;
-    return showError(result.error);
+  if (!result.error) {
+    savedState[key] = { deadline: result.deadline || null, discussed: result.discussed || null };
   }
+  if (thisSave !== latestSave[key]) return; // a newer click on this reading will update the page
+  delete saveQueue[key];
+  const serverState = savedState[key];
+  delete savedState[key];
 
-  // Save it locally, redraw the reading, and update the "Due soon" list.
-  const deadlines = (DATA.mats[courseId].deadlines ??= {});
-  if (result.deadline) deadlines[url] = result.deadline;
-  else delete deadlines[url];
-  closeDueEditor(box);
-  updateDueListReading(courseId, url, result.deadline);
+  if (result.error) {
+    applyReadingState(courseId, url, serverState);
+    for (const other of readingBoxes(courseId, url)) {
+      const slot = other.querySelector(".rdue-err");
+      if (slot) slot.textContent = `Not saved: ${result.error}`;
+    }
+    return;
+  }
+  const saved = serverState;
+  const sameAsShown =
+    saved.deadline?.date === expected.deadline?.date && !!saved.discussed === !!expected.discussed;
+  if (!sameAsShown) return applyReadingState(courseId, url, saved);
+
+  // Saved as shown. Keep the server's copy (it differs only in the exact time)
+  // without redrawing, so anything opened since the click stays open.
+  const course = DATA.mats[courseId];
+  if (saved.deadline) course.deadlines[url] = saved.deadline;
+  if (saved.discussed) course.discussed[url] = saved.discussed;
+  const dueItem = DATA.due?.find((item) => item.key === `reading:${courseId}:${url}`);
+  if (dueItem && saved.deadline) {
+    dueItem.added_by = saved.deadline.by;
+    dueItem.added_at = saved.deadline.at;
+  }
 }
 
 /** Add, move or remove a reading in the "Due soon" list after its date changes. */
@@ -792,22 +927,122 @@ function updateDueListReading(courseId, url, deadline) {
   renderDue();
 }
 
-// One click handler for every due date control on the tab.
-$("#courses").addEventListener("click", (event) => {
-  const button = event.target.closest(".rdue-btn");
-  if (!button || button.disabled) return;
-  const box = button.closest(".rdue");
-  const action = button.dataset.act;
-  if (action === "edit") openDueEditor(box);
-  else if (action === "cancel") closeDueEditor(box);
-  else if (action === "remove") saveDueDate(box, null);
-  else if (action === "pick") saveDueDate(box, button.dataset.day);
-});
+// One click handler for every due date control, on both tabs.
+for (const tab of ["#courses", "#due"]) {
+  $(tab).addEventListener("click", (event) => {
+    const button = event.target.closest(".rdue-btn");
+    if (!button || button.disabled) return;
+    const box = button.closest(".rdue");
+    const action = button.dataset.act;
+    if (action === "edit") openDueEditor(box);
+    else if (action === "cancel") closeDueEditor(box);
+    else if (action === "remove") saveReading(box, { date: null });
+    else if (action === "pick") saveReading(box, { date: button.dataset.day });
+    else if (action === "discuss") saveReading(box, { discussed: true });
+    else if (action === "undiscuss") saveReading(box, { discussed: false });
+  });
 
-// While picking a day, Escape cancels.
-$("#courses").addEventListener("keydown", (event) => {
-  const box = event.target.closest(".rdue");
-  if (box?.querySelector(".rdue-days") && event.key === "Escape") closeDueEditor(box);
+  // While picking a day, Escape cancels.
+  $(tab).addEventListener("keydown", (event) => {
+    const box = event.target.closest(".rdue");
+    if (box?.querySelector(".rdue-days") && event.key === "Escape") closeDueEditor(box);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Readings without a due date" (bottom of the "Due soon" tab)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Each class gets a card listing its readings that have no date and aren't
+// marked as discussed in class. Only the first few are shown until "Show all" is clicked.
+const UNDATED_SHOWN = 5;
+// Cards where "Show all" was clicked, and cards whose "discussed in class" list is open, so
+// they stay that way when the card is redrawn.
+const undatedShowAll = new Set();
+const undatedDiscussedOpen = new Set();
+
+/** A class's readings, split into those still needing a date and those discussed in class. Each link counts once. */
+function undatedReadings(course) {
+  const seen = new Set();
+  const needDate = [];
+  const discussed = [];
+  for (const entry of courseEntries(course)) {
+    if (entry.cat !== "reading" || seen.has(entry.url)) continue;
+    seen.add(entry.url);
+    if (course.discussed?.[entry.url]) discussed.push(entry);
+    else if (!course.deadlines?.[entry.url]) needDate.push(entry);
+  }
+  return { needDate, discussed };
+}
+
+function undatedRowHtml(entry, courseId, extra) {
+  const where = entry.ctx ? `<span class="ctx">${esc(entry.ctx)}</span>` : "";
+  return `
+    <li class="${extra ? "extra" : ""}">
+      <span class="ic">📄</span>
+      ${fileTitleHtml(entry)}${where}${readingDueBoxHtml(courseId, entry.url)}${previewPanelHtml(entry, courseId)}
+    </li>`;
+}
+
+/** One empty slot per class, in the same order as the Slides & readings tab, filled as each class loads. */
+function renderUndatedPlaceholders() {
+  undatedShowAll.clear();
+  undatedDiscussedOpen.clear();
+  const classes = DATA.courses.filter((course) => course.is_class);
+  $("#undated").innerHTML = `
+    <h2 class="undated-h hidden">Readings without a due date</h2>
+    ${classes.map((course) => `<div class="ucourse hidden" data-cid="${course.id}"></div>`).join("")}`;
+}
+
+/** Fill in (or redraw) one class's card. */
+function renderUndatedCourse(courseId) {
+  const card = document.querySelector(`.ucourse[data-cid="${courseId}"]`);
+  const course = DATA.mats[courseId];
+  if (!card || !course) return; // not a class, or not loaded yet
+
+  const { needDate, discussed } = undatedReadings(course);
+  const listing = DATA.courses.find((c) => c.id === courseId) || course;
+  const showAll = undatedShowAll.has(courseId);
+  card.classList.toggle("show-all", showAll);
+  card.classList.toggle("hidden", !needDate.length && !discussed.length);
+
+  const hiddenCount = needDate.length - UNDATED_SHOWN;
+  const more =
+    hiddenCount > 0
+      ? `<button class="umore" data-act="more">${showAll ? "Show fewer" : `Show ${hiddenCount} more`}</button>`
+      : "";
+  const list = needDate.length
+    ? `<ul class="ulist">${needDate.map((entry, i) => undatedRowHtml(entry, courseId, i >= UNDATED_SHOWN)).join("")}</ul>${more}`
+    : `<p class="sub uall">Every reading has a due date or was discussed in class.</p>`;
+  const discussedList = discussed.length
+    ? `
+      <details class="udiscussed" ${undatedDiscussedOpen.has(courseId) ? "open" : ""}>
+        <summary>${discussed.length} discussed</summary>
+        <ul class="ulist">${discussed.map((entry) => undatedRowHtml(entry, courseId, false)).join("")}</ul>
+      </details>`
+    : "";
+
+  card.innerHTML = `
+    <div class="uhead">${courseTitleHtml(listing)}</div>
+    ${list}${discussedList}`;
+
+  const discussedDetails = card.querySelector("details.udiscussed");
+  discussedDetails?.addEventListener("toggle", () => {
+    if (discussedDetails.open) undatedDiscussedOpen.add(courseId);
+    else undatedDiscussedOpen.delete(courseId);
+  });
+
+  // The heading shows once any class has something to list.
+  $(".undated-h").classList.toggle("hidden", !$$(".ucourse:not(.hidden)").length);
+}
+
+$("#undated").addEventListener("click", (event) => {
+  const button = event.target.closest(".umore");
+  if (!button) return;
+  const courseId = Number(button.closest(".ucourse").dataset.cid);
+  if (undatedShowAll.has(courseId)) undatedShowAll.delete(courseId);
+  else undatedShowAll.add(courseId);
+  renderUndatedCourse(courseId);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -928,14 +1163,23 @@ $("#signout").onclick = () => {
  * message:  text to show (left as is if not given)
  * fraction: how full the progress bar is, from 0 to 1 (left as is if not given)
  */
+let loadState = "off";
+
 function setLoading(state, message, fraction) {
+  loadState = state;
   const bar = $("#loadbar");
-  bar.classList.toggle("hidden", state === "off");
+  $("#topslot").classList.toggle("hidden", state === "off");
+  updateTopSlot();
   bar.classList.toggle("done", state === "done" || state === "failed");
   bar.classList.toggle("failed", state === "failed");
   $("#loadicon").textContent = state === "failed" ? "✕" : "✓";
   if (message) $("#loadtxt").textContent = message;
   if (fraction != null) $("#progfill").style.width = Math.round(fraction * 100) + "%";
+}
+
+/** Once everything has loaded, the top box on "Due soon" swaps the progress bar for the note. */
+function updateTopSlot() {
+  $("#topslot").classList.toggle("show-note", loadState === "done" && currentTab === "due");
 }
 
 function fail(message) {
@@ -971,6 +1215,7 @@ function onEvent(event) {
       };
       $("#sub").textContent = headerSubtitle();
       renderCoursePlaceholders();
+      renderUndatedPlaceholders();
       break;
 
     case "due":
@@ -987,7 +1232,7 @@ function onEvent(event) {
       break;
 
     case "due_error":
-      $("#due").innerHTML = `<div class="err">Couldn't load due dates: ${esc(event.error)}</div>`;
+      $("#due-list").innerHTML = `<div class="err">Couldn't load due dates: ${esc(event.error)}</div>`;
       DATA.got++;
       break;
 
@@ -1048,7 +1293,8 @@ async function load() {
   $("#err").innerHTML = "";
   $("#sub").textContent = "Connecting…";
   setLoading("loading", "Connecting to CourseWorks…", 0.03);
-  $("#due").innerHTML = "";
+  $("#due-list").innerHTML = "";
+  $("#undated").innerHTML = "";
   $("#courses").innerHTML = "";
 
   let response;

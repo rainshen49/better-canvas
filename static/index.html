@@ -20,11 +20,20 @@
     </header>
 
     <main>
-      <!-- Status bar: progress while loading, then ✓ or ✕ -->
-      <div id="loadbar" class="loadbar hidden" role="status" aria-live="polite">
-        <span class="ok" id="loadicon">✓</span>
-        <span id="loadtxt">Connecting to CourseWorks…</span>
-        <div class="prog"><i id="progfill"></i></div>
+      <!-- One box at the top. While loading it shows progress. Once everything
+           has loaded it shows the note about reading due dates on "Due soon",
+           and ✓ (or ✕ if loading failed) on "Slides & readings". The two are
+           stacked in the same spot, so the box doesn't change size when they swap. -->
+      <div id="topslot" class="topslot hidden">
+        <div id="loadbar" class="loadbar" role="status" aria-live="polite">
+          <span class="ok" id="loadicon">✓</span>
+          <span id="loadtxt">Connecting to CourseWorks…</span>
+          <div class="prog"><i id="progfill"></i></div>
+        </div>
+        <div id="readnote" class="note" role="note">
+          ⚠️ <b>Reading due dates come from classmates.</b>
+          <a href="#undated" class="jump-undated">Contribute below</a>
+        </div>
       </div>
 
       <div id="err"></div>
@@ -49,7 +58,12 @@
       </section>
 
       <!-- "Due soon" tab (filled in by app.js) -->
-      <section id="due"></section>
+      <section id="due">
+        <!-- Everything due in the next few days, by day -->
+        <div id="due-list"></div>
+        <!-- Readings nobody has given a due date yet, by course -->
+        <div id="undated"></div>
+      </section>
 
       <!-- "Slides & readings" tab -->
       <section id="mat" class="hidden">
