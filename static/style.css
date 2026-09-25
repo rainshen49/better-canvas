@@ -65,9 +65,17 @@ header {
 }
 
 h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   font-size: 17px;
   font-weight: 650;
+}
+
+/* The sail next to the title */
+.logo {
+  flex: none;
 }
 
 main {
