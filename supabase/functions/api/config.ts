@@ -37,12 +37,14 @@ export const IGNORE_COURSES = [
 ];
 
 /**
- * Which web pages may call this API from a browser (CORS), comma-separated,
- * e.g. "https://rainshen49.github.io". "*" (the default) allows any page. That's
- * safe here because nothing is sent automatically: each call carries the
- * person's token, which only the page they logged in on has.
+ * Which web pages may call this API from a browser (CORS), comma-separated.
+ * Defaults to the GitHub Pages site only. Add more with
+ * ALLOWED_ORIGINS="https://rainshen49.github.io,https://other.example", or "*"
+ * to allow any page. Running locally doesn't need this: there the page and API
+ * are on the same server.
  */
-export const ALLOWED_ORIGINS = (env("ALLOWED_ORIGINS") ?? "*").split(",").map((x) => x.trim()).filter(Boolean);
+export const ALLOWED_ORIGINS = (env("ALLOWED_ORIGINS") ?? "https://rainshen49.github.io")
+  .split(",").map((x) => x.trim()).filter(Boolean);
 
 /**
  * Where reading due dates are saved. On Supabase, SUPABASE_DB_URL is set
