@@ -6,6 +6,10 @@
 // each due item's details in whatever order they finish, and finally "done".
 // The page changes as each update arrives, so results show up before
 // everything has loaded.
+//
+// The last complete set of updates is also saved in the browser. When the page
+// opens again within a day, that saved copy is shown straight away (marked as
+// saved data) while the fresh one loads, and is swapped out once it's ready.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers and constants
@@ -968,6 +972,12 @@ for (const tab of ["#courses", "#due"]) {
     const button = event.target.closest(".rdue-btn");
     if (!button || button.disabled) return;
     const box = button.closest(".rdue");
+    // Saved data is about to be replaced, which would undo the change on screen.
+    if (showingSaved) {
+      const slot = box.querySelector(".rdue-err");
+      if (slot) slot.textContent = "Still refreshing. Try again in a moment.";
+      return;
+    }
     const action = button.dataset.act;
     if (action === "edit") openDueEditor(box);
     else if (action === "cancel") closeDueEditor(box);
@@ -1201,6 +1211,8 @@ $("#authform").onsubmit = (event) => {
 $("#signout").onclick = () => {
   currentRequest?.abort();
   setToken("");
+  clearSavedData();
+  setShowingSaved(false);
   DATA = null;
   showAuth();
 };
@@ -1329,6 +1341,117 @@ function onEvent(event) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Saved copy of the last load
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Every update from the last complete load is saved in the browser, so the
+// page can show it right away next time while fresh data loads. It's only
+// used if it's less than a day old and was loaded with the same token.
+const SAVED_STORAGE_KEY = "cw-saved";
+const SAVED_MAX_AGE = MS_PER_DAY;
+
+// True while the page is showing the saved copy and the fresh data is still loading.
+let showingSaved = false;
+
+function setShowingSaved(value) {
+  showingSaved = value;
+  document.body.classList.toggle("showing-saved", value);
+}
+
+/** A short fingerprint of the token, so one person's saved data isn't shown to another. */
+function tokenFingerprint(token) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < token.length; i++) {
+    hash ^= token.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16) + ":" + token.length;
+}
+
+/** The saved copy for this token, or null if there isn't a usable one. */
+function readSavedData(token) {
+  let saved;
+  try {
+    saved = JSON.parse(localStorage.getItem(SAVED_STORAGE_KEY) || "null");
+  } catch (e) {
+    return null;
+  }
+  if (!saved) return null;
+  const age = Date.now() - saved.savedAt;
+  const usable =
+    saved.version === 1 &&
+    saved.token === tokenFingerprint(token) &&
+    Array.isArray(saved.events) &&
+    age >= 0 &&
+    age < SAVED_MAX_AGE;
+  if (!usable) {
+    clearSavedData();
+    return null;
+  }
+  return saved;
+}
+
+function writeSavedData(token, events) {
+  try {
+    localStorage.setItem(
+      SAVED_STORAGE_KEY,
+      JSON.stringify({ version: 1, token: tokenFingerprint(token), savedAt: Date.now(), events }),
+    );
+  } catch (e) {
+    // Not allowed, or too big for the browser's storage: don't keep an older copy around either.
+    clearSavedData();
+  }
+}
+
+function clearSavedData() {
+  try {
+    localStorage.removeItem(SAVED_STORAGE_KEY);
+  } catch (e) {}
+}
+
+/** "just now", "12 min ago" or "5 h ago". */
+function timeAgo(time) {
+  const minutes = Math.floor((Date.now() - time) / 6e4);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  return `${Math.floor(minutes / 60)} h ago`;
+}
+
+/** Empty every part of the page that the updates fill in. */
+function clearView() {
+  DATA = null;
+  $("#err").innerHTML = "";
+  $("#due-list").innerHTML = "";
+  $("#undated").innerHTML = "";
+  $("#courses").innerHTML = "";
+}
+
+/**
+ * Replace what's on screen with a complete set of updates. What was open
+ * (due items, course cards) and the scroll position are kept where possible.
+ */
+function redrawFrom(events) {
+  const scroll = window.scrollY;
+  const openItems = $$("details.ditem[open]").map((d) => d.dataset.key);
+  const openCourses = $$("details.course[open]").map((d) => d.dataset.cid);
+  const othersOpen = $("details.others")?.open;
+
+  clearView();
+  for (const event of events) onEvent(event);
+
+  for (const key of openItems) {
+    const details = document.querySelector(`details.ditem[data-key="${CSS.escape(key)}"]`);
+    if (details) details.open = true;
+  }
+  for (const id of openCourses) {
+    const card = document.querySelector(`details.course[data-cid="${CSS.escape(id)}"]`);
+    if (card) card.open = true;
+  }
+  if (othersOpen && $("details.others")) $("details.others").open = true;
+  window.scrollTo(0, scroll);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Loading
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1341,13 +1464,38 @@ async function load() {
   currentRequest = request;
 
   showApp();
-  DATA = null;
-  $("#err").innerHTML = "";
-  $("#sub").textContent = "Connecting…";
-  setLoading("loading", "Connecting to CourseWorks…", 0.03);
-  $("#due-list").innerHTML = "";
-  $("#undated").innerHTML = "";
-  $("#courses").innerHTML = "";
+  clearView();
+  setShowingSaved(false);
+
+  // Show the saved copy, if there's a recent one, while the fresh data loads.
+  const saved = readSavedData(token);
+  if (saved) {
+    try {
+      for (const event of saved.events) onEvent(event);
+      setShowingSaved(true);
+    } catch (e) {
+      clearSavedData();
+      clearView();
+    }
+  }
+  const savedNote = () => `saved ${timeAgo(saved.savedAt)}`;
+  if (showingSaved) {
+    $("#sub").textContent = headerSubtitle(` · ${savedNote()}, refreshing…`);
+    setLoading("loading", `Showing data ${savedNote()}. Refreshing from CourseWorks…`, 0.03);
+  } else {
+    $("#sub").textContent = "Connecting…";
+    setLoading("loading", "Connecting to CourseWorks…", 0.03);
+  }
+
+  // If loading fails while the saved copy is on screen, keep it and say it's out of date.
+  const failLoad = (message) => {
+    if (request !== currentRequest) return;
+    if (!showingSaved) return fail(message);
+    setShowingSaved(false);
+    setLoading("failed", `Couldn't refresh. Showing data ${savedNote()}.`);
+    $("#err").innerHTML = `<div class="err">Couldn't refresh: ${esc(message)}</div>`;
+    $("#sub").textContent = headerSubtitle(` · ${savedNote()}`);
+  };
 
   let response;
   try {
@@ -1356,7 +1504,7 @@ async function load() {
       signal: request.signal,
     });
   } catch (e) {
-    if (e.name !== "AbortError") fail(e.message);
+    if (e.name !== "AbortError") failLoad(e.message);
     return;
   }
 
@@ -1364,12 +1512,50 @@ async function load() {
   const isStream = (response.headers.get("content-type") || "").includes("ndjson");
   if (!isStream) {
     const result = await response.json().catch(() => ({ error: "HTTP " + response.status }));
+    if (request !== currentRequest) return;
     if (result.need_token) {
       setToken("");
+      clearSavedData();
+      setShowingSaved(false);
       return showAuth(result.error);
     }
-    return fail(result.error);
+    return failLoad(result.error);
   }
+
+  // Every update in this load, to save once it's complete and, if the saved
+  // copy is on screen, to draw all at once in its place.
+  const events = [];
+  let finished = false;
+  // Progress while the saved copy is on screen (otherwise onEvent keeps count in DATA).
+  let got = 0;
+  let total = 0;
+
+  const handle = (event) => {
+    events.push(event);
+    if (event.type === "done") {
+      finished = true;
+      // Only a load where everything arrived is worth saving.
+      const complete = !events.some((e) => e.type === "due_error" || e.type === "course_error");
+      if (complete) writeSavedData(token, events);
+      if (showingSaved) {
+        setShowingSaved(false);
+        redrawFrom(events);
+      } else {
+        onEvent(event);
+      }
+      return;
+    }
+    if (!showingSaved) return onEvent(event);
+
+    if (event.type === "start") total = event.courses.length + 1;
+    else got++;
+    if (event.type === "due") total += event.due.filter((item) => item.has_detail).length;
+    setLoading(
+      "loading",
+      `Showing data ${savedNote()}. Refreshing… ${got} of ${total || "?"} ready`,
+      total ? Math.max(0.03, got / total) : 0.03,
+    );
+  };
 
   // Read the updates as they arrive. Each complete line is one update.
   const reader = response.body.getReader();
@@ -1384,17 +1570,15 @@ async function load() {
       while ((newline = buffer.indexOf("\n")) >= 0) {
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
-        if (line.trim()) onEvent(JSON.parse(line));
+        if (line.trim()) handle(JSON.parse(line));
       }
     }
   } catch (e) {
-    if (e.name !== "AbortError") fail("connection lost (" + e.message + ")");
+    if (e.name !== "AbortError") failLoad("connection lost (" + e.message + ")");
     return;
   }
 
-  if (request === currentRequest && !DATA?.finished) {
-    fail("the response ended early. Reload the page to try again.");
-  }
+  if (!finished) failLoad("the response ended early. Reload the page to try again.");
 }
 
 load();

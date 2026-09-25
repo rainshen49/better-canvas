@@ -327,6 +327,12 @@ details.course.cc,
   color: var(--warn);
 }
 
+/* While saved data is on screen, due date buttons wait for the fresh data. */
+body.showing-saved .rdue-btn {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 /* ==========================================================================
    Login screen
    ========================================================================== */
