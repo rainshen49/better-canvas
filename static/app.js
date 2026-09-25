@@ -159,7 +159,7 @@ function statusTag(item) {
 function dueItemHtml(item) {
   const typeLabel = ITEM_TYPE_LABELS[item.type] || esc(item.type);
   const points = item.points != null ? ` · ${item.points} pts` : "";
-  const addedBy = item.added_by ? ` · date from ${esc(item.added_by)}` : "";
+  // Who added a reading's date is shown only when the row is expanded (see fillDetail).
   // Readings only have a day, not a time.
   const time = item.date_only ? "All day" : formatTime(new Date(item.due));
   return `
@@ -168,7 +168,7 @@ function dueItemHtml(item) {
         <div class="time">${time}</div>
         <div>
           <span class="dtitle">${esc(item.title)}</span>
-          <div class="meta"><span class="tag t-course cc" ${courseColor(item.course_id)}>${esc(item.course)}</span> ${typeLabel}${points}${addedBy}</div>
+          <div class="meta"><span class="tag t-course cc" ${courseColor(item.course_id)}>${esc(item.course)}</span> ${typeLabel}${points}</div>
         </div>
         <div class="rstat">${statusTag(item)}<span class="chev" aria-hidden="true">▸</span></div>
       </summary>
@@ -334,6 +334,16 @@ function fileListHtml(heading, rows) {
   return `<h4>${heading}</h4><ul class="files">${rows.join("")}</ul>`;
 }
 
+/** "⬇ Download" for a dated reading that's a file, or "Open reading ↗" for a web link or page. */
+function readingLinkHtml(item) {
+  const course = DATA.mats[item.course_id];
+  const entry = course && courseEntries(course).find((e) => e.url === item.url);
+  const download = entry ? readingDownloadUrl(entry, item.course_id) : downloadUrl(item.url);
+  return download
+    ? externalLink(download, "⬇ Download", "openlink")
+    : externalLink(item.url, "Open reading ↗", "openlink");
+}
+
 function fillDetail(key) {
   const body = document.querySelector(`details.ditem[data-key="${CSS.escape(key)}"] .dbody`);
   if (!body) return;
@@ -344,9 +354,8 @@ function fillDetail(key) {
 
   if (item.type === "reading") {
     body.innerHTML = `
-      <p class="sub">Due date added by ${esc(item.added_by)} on ${formatDateTime(item.added_at)}.</p>
       <div class="rdue-line">${readingDueBoxHtml(item.course_id, item.url, true)}</div>
-      ${externalLink(item.url, "Open reading ↗", "openlink")}`;
+      ${readingLinkHtml(item)}`;
     return;
   }
   if (!detail) {
@@ -757,7 +766,7 @@ function readingDueHtml(courseId, url, canHide) {
   const past = deadline.date < dayFromToday(0);
   return `
     <span class="rdue-val ${past ? "past" : ""}" title="Added by ${esc(deadline.by)} on ${formatDateTime(deadline.at)}">
-      📅 ${past ? "Was due" : "Due"} ${formatShortDay(deadline.date)} · ${esc(deadline.by)}
+      📅 ${past ? "Was due" : "Due"} ${formatShortDay(deadline.date)}
     </span>
     <button class="rdue-btn" data-act="edit">Change</button>
     ${errorSlot}`;
@@ -1001,12 +1010,29 @@ function undatedReadings(course) {
   return { needDate, discussed };
 }
 
+/**
+ * A direct download link for a reading that's a CourseWorks file, or null for
+ * web links and pages. Uses the file's own link when known (it carries an access
+ * code); otherwise builds one from the course and file number.
+ */
+function readingDownloadUrl(entry, courseId) {
+  if (entry.download) return entry.download;
+  const courseUrl = DATA.mats[courseId]?.url;
+  if (entry.file_id && courseUrl) return `${courseUrl}/files/${entry.file_id}/download?download_frd=1`;
+  return downloadUrl(entry.url);
+}
+
+/**
+ * A reading in "Readings without a due date": its title opens a preview (like
+ * on the Slides & readings tab), and files also get a download icon.
+ */
 function undatedRowHtml(entry, courseId, extra) {
   const where = entry.ctx ? `<span class="ctx">${esc(entry.ctx)}</span>` : "";
+  const download = readingDownloadUrl(entry, courseId);
   return `
     <li class="${extra ? "extra" : ""}">
       <span class="ic">📄</span>
-      ${fileTitleHtml(entry)}${where}${readingDueBoxHtml(courseId, entry.url, true)}${previewPanelHtml(entry, courseId)}
+      ${fileTitleHtml(entry)}${where}${readingDueBoxHtml(courseId, entry.url, true)}${downloadButton(download)}${previewPanelHtml(entry, courseId)}
     </li>`;
 }
 
