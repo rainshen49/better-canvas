@@ -11,7 +11,7 @@ A simpler view of Columbia CourseWorks: what's due soon and every class's slides
 
 **Readings without a due date**
 - At the bottom of Due soon, each class lists its readings that nobody has dated yet.
-- Give one a date with **+ Due date** (any of the next 7 days), or mark it **✓ Discussed** if it was covered in class and doesn't need one.
+- Give one a date with **+ Due date** (any of the next 10 weekdays), or mark it **✓ Discussed** if it was covered in class and doesn't need one.
 - Both are shared with everyone in the course, along with the name of whoever set them. Anyone can change them or undo.
 - Changes show up instantly. If a change can't be saved, it's undone with a short message.
 

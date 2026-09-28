@@ -22,6 +22,16 @@ export function addDays(day: string, days: number): string {
 }
 
 /** Canvas wants times like 2026-09-24T18:00:00Z (no milliseconds). */
+/** The next `count` weekdays (Mon–Fri) as "YYYY-MM-DD", starting from `first` if it's a weekday. */
+export function nextWeekdays(first: string, count: number): string[] {
+  const days: string[] = [];
+  for (let day = first; days.length < count; day = addDays(day, 1)) {
+    const weekday = new Date(day + "T12:00:00Z").getUTCDay();
+    if (weekday !== 0 && weekday !== 6) days.push(day);
+  }
+  return days;
+}
+
 const canvasTime = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
 
 export const DETAIL_PATHS: Record<string, string> = {

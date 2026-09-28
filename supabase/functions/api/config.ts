@@ -11,11 +11,14 @@ export const BASE = (env("CANVAS_BASE") ?? "https://courseworks2.columbia.edu").
 /** How many days ahead "Due soon" looks, for both CourseWorks items and classmates' reading dates. */
 export const DAYS_AHEAD = Number(env("DAYS_AHEAD") ?? "14");
 
-/** A reading's due date can be one of this many days, starting today. The page has the same limit. */
-export const PICK_DAYS = 7;
+/**
+ * A reading's due date can be one of the next this-many weekdays (Mon–Fri),
+ * counting today if it's a weekday. The page has the same limit.
+ */
+export const PICK_WEEKDAYS = 10;
 
 /**
- * The time zone "today" follows (for reading due dates and the 7 pickable days).
+ * The time zone "today" follows (for reading due dates and the pickable weekdays).
  * Edge Functions run on UTC, so without this "today" would switch over at 8 pm New York time.
  */
 export const APP_TIMEZONE = env("APP_TIMEZONE") ?? "America/New_York";

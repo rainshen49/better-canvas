@@ -15,8 +15,8 @@
 
 import { absUrl, CanvasClient, CanvasError } from "./canvas.ts";
 import { previewKind } from "./classify.ts";
-import { ALLOWED_ORIGINS, DAYS_AHEAD, PICK_DAYS } from "./config.ts";
-import { addDays, fetchDetail, fetchDue, today } from "./due.ts";
+import { ALLOWED_ORIGINS, DAYS_AHEAD, PICK_WEEKDAYS } from "./config.ts";
+import { fetchDetail, fetchDue, nextWeekdays, today } from "./due.ts";
 import { allEntries, courseSummary, fetchCourses, fetchMaterials } from "./materials.ts";
 import { sanitize } from "./sanitize.ts";
 import { setDeadline, setDiscussed } from "./store.ts";
@@ -167,9 +167,8 @@ async function setReading(req: Request): Promise<Response> {
     ) {
       return refuse("That isn't a valid date.");
     }
-    const first = today();
-    if (!(day >= first && day <= addDays(first, PICK_DAYS - 1))) {
-      return refuse(`Pick a date within the next ${PICK_DAYS} days.`);
+    if (!nextWeekdays(today(), PICK_WEEKDAYS).includes(day)) {
+      return refuse(`Pick one of the next ${PICK_WEEKDAYS} weekdays.`);
     }
   }
 

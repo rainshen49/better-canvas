@@ -45,8 +45,9 @@ const ITEM_TYPE_LABELS = {
 const MS_PER_HOUR = 36e5;
 const MS_PER_DAY = 864e5;
 
-// A reading's due date can be one of this many days, starting today (the server checks this too).
-const PICK_DAYS = 7;
+// A reading's due date can be one of the next this-many weekdays, counting today
+// if it's a weekday (the server checks this too).
+const PICK_WEEKDAYS = 10;
 
 // Where the API is: "" for the same server (running locally), or the Supabase
 // Edge Function's address when the page is on GitHub Pages. Set in config.js.
@@ -131,6 +132,17 @@ function dayFromToday(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return dayString(date);
+}
+
+/** The days a reading's due date can be: the next PICK_WEEKDAYS weekdays (Mon–Fri), from today. */
+function pickableDays() {
+  const days = [];
+  for (let offset = 0; days.length < PICK_WEEKDAYS; offset++) {
+    const day = dayFromToday(offset);
+    const weekday = parseDay(day).getDay();
+    if (weekday !== 0 && weekday !== 6) days.push(day);
+  }
+  return days;
 }
 
 const formatShortDay = (day) =>
@@ -777,9 +789,9 @@ function readingDueHtml(courseId, url, canHide) {
 }
 
 /** Label for a day button: "Today", "Tomorrow", then e.g. "Sat 26". */
-function dayButtonLabel(offset, day) {
-  if (offset === 0) return "Today";
-  if (offset === 1) return "Tomorrow";
+function dayButtonLabel(day) {
+  if (day === dayFromToday(0)) return "Today";
+  if (day === dayFromToday(1)) return "Tomorrow";
   const date = parseDay(day);
   return `${date.toLocaleDateString(undefined, { weekday: "short" })} ${date.getDate()}`;
 }
@@ -788,12 +800,11 @@ function dayButtonLabel(offset, day) {
 function openDueEditor(box) {
   const deadline = readingDeadline(box.dataset.cid, box.dataset.url);
   const dayButtons = [];
-  for (let offset = 0; offset < PICK_DAYS; offset++) {
-    const day = dayFromToday(offset);
+  for (const day of pickableDays()) {
     const isCurrent = deadline?.date === day;
     dayButtons.push(
       `<button class="rdue-btn rdue-day ${isCurrent ? "primary" : ""}" data-act="pick" data-day="${day}"
-         title="${formatShortDay(day)}" aria-pressed="${isCurrent}">${dayButtonLabel(offset, day)}</button>`,
+         title="${formatShortDay(day)}" aria-pressed="${isCurrent}">${dayButtonLabel(day)}</button>`,
     );
   }
   box.innerHTML = `
@@ -875,9 +886,9 @@ async function saveReading(box, change) {
   const url = box.dataset.url;
 
   const day = change.date;
-  if (day && !(day >= dayFromToday(0) && day <= dayFromToday(PICK_DAYS - 1))) {
+  if (day && !pickableDays().includes(day)) {
     const slot = box.querySelector(".rdue-err");
-    if (slot) slot.textContent = `Pick a date within the next ${PICK_DAYS} days.`;
+    if (slot) slot.textContent = `Pick one of the next ${PICK_WEEKDAYS} weekdays.`;
     return;
   }
 
