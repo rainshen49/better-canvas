@@ -8,6 +8,9 @@
 // A reading is in at most one of the two tables: giving it a date unmarks
 // it, and marking it removes its date. Each switch happens in one transaction.
 //
+// `user_logins` is for analytics only: the last time each person opened the
+// app, by name (nothing else about them is kept). The page never reads it.
+//
 // Saved in Postgres when DATABASE_URL or SUPABASE_DB_URL is set (on Supabase
 // the function connects straight to the project's database with plain SQL).
 // When running locally without either, dev.ts plugs in a SQLite file instead
@@ -51,6 +54,10 @@ export const SCHEMA = [
      set_at      TEXT    NOT NULL,  -- when it was marked (UTC)
      PRIMARY KEY (course_id, url)
    )`,
+  `CREATE TABLE IF NOT EXISTS user_logins (
+     name          TEXT  PRIMARY KEY,  -- the person's CourseWorks name
+     last_login_at TEXT  NOT NULL      -- when they last opened the app (UTC)
+   )`,
 ];
 // Postgres only: Supabase's public API (used with the project's public key) can
 // see tables in the "public" schema. Row Level Security with no policies
@@ -58,6 +65,7 @@ export const SCHEMA = [
 const POSTGRES_ONLY = [
   "ALTER TABLE deadlines ENABLE ROW LEVEL SECURITY",
   "ALTER TABLE discussed_readings ENABLE ROW LEVEL SECURITY",
+  "ALTER TABLE user_logins ENABLE ROW LEVEL SECURITY",
 ];
 
 export type Row = Record<string, any>;
@@ -206,4 +214,13 @@ export async function setDiscussed(
     ],
   ]);
   return { by: userName, at: now, title };
+}
+
+/** Analytics: note that this person (by name only) just logged in. */
+export async function recordLogin(name: string): Promise<void> {
+  await (await database()).run([[
+    `INSERT INTO user_logins (name, last_login_at) VALUES (?, ?)
+     ON CONFLICT (name) DO UPDATE SET last_login_at = excluded.last_login_at`,
+    [name, nowUtc()],
+  ]]);
 }

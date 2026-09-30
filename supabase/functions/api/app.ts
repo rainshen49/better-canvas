@@ -19,7 +19,7 @@ import { ALLOWED_ORIGINS, DAYS_AHEAD, PICK_WEEKDAYS } from "./config.ts";
 import { fetchDetail, fetchDue, nextWeekdays, today } from "./due.ts";
 import { allEntries, courseSummary, fetchCourses, fetchMaterials } from "./materials.ts";
 import { sanitize } from "./sanitize.ts";
-import { setDeadline, setDiscussed } from "./store.ts";
+import { recordLogin, setDeadline, setDiscussed } from "./store.ts";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const BAD_TOKEN = "That token didn't work. It may be mistyped, expired or revoked.";
@@ -127,6 +127,10 @@ async function apiData(req: Request): Promise<Response> {
     if (e instanceof CanvasError && e.status === 401) throw new NeedToken(BAD_TOKEN);
     return json({ error: String((e as Error)?.message ?? e) });
   }
+  // Analytics: the token worked, so this counts as a login. Saved in the background;
+  // if it fails, the page still loads normally.
+  const name = me.name || me.short_name;
+  if (name) recordLogin(name).catch((e) => console.error(`Couldn't record login: ${errorName(e)}`));
   return new Response(streamEvents(cv, me, courses), {
     headers: { "Content-Type": "application/x-ndjson", ...NO_STORE, "X-Accel-Buffering": "no" },
   });
