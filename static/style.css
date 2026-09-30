@@ -453,17 +453,23 @@ body.showing-saved .rdue-btn {
   text-transform: none;
 }
 
-/* One due item: time | title and course | status */
+/* One due item: the browser's ▸ | time | title and course | status */
 .row {
-  display: grid;
-  grid-template-columns: 64px 1fr auto;
-  align-items: center;
-  gap: 12px;
   margin-bottom: 6px;
   padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--card);
+}
+
+/* A summary only shows the browser's ▸ while it's a list item, so the layout is on the box inside it,
+   which leaves room for the ▸ on the same line. */
+.rowgrid {
+  display: inline-grid;
+  grid-template-columns: 64px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 1.25em);
 }
 
 .row.done {
@@ -510,12 +516,7 @@ details.ditem {
 
 details.ditem > summary {
   margin-bottom: 0;
-  list-style: none;
   cursor: pointer;
-}
-
-details.ditem > summary::-webkit-details-marker {
-  display: none;
 }
 
 details.ditem > summary:hover {
@@ -528,14 +529,9 @@ details.ditem[open] > summary {
   border-bottom-right-radius: 0;
 }
 
-.chev {
+/* The browser's own ▸ / ▾ on everything that opens */
+summary::marker {
   color: var(--mute);
-  font-size: 13px;
-  transition: transform 0.15s;
-}
-
-details.ditem[open] .chev {
-  transform: rotate(90deg);
 }
 
 /* Details panel under an expanded item */
@@ -757,27 +753,17 @@ details.course {
 }
 
 details.course > summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   padding: 14px 16px;
   font-weight: 650;
-  list-style: none;
   cursor: pointer;
 }
 
-details.course > summary::-webkit-details-marker {
-  display: none;
-}
-
-details.course > summary::before {
-  content: "▸";
-  color: var(--mute);
-  transition: transform 0.15s;
-}
-
-details.course[open] > summary::before {
-  transform: rotate(90deg);
+/* The course name and counts, beside the browser's ▸ (see .rowgrid) */
+.chead {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 1.25em);
 }
 
 .counts {
@@ -915,31 +901,13 @@ li a.dl:focus-visible::after {
 }
 
 /* Title of anything that expands to show a preview underneath (not a link) */
-.plink {
-  padding: 0;
-  border: 0;
-  background: none;
+details.plink > summary {
   color: var(--ink);
-  font: inherit;
-  text-align: left;
   cursor: pointer;
 }
 
-.plink:hover .pchev {
+details.plink > summary:hover::marker {
   color: var(--acc);
-}
-
-.pchev {
-  display: inline-block;
-  margin-left: 2px;
-  color: var(--ink);
-  font-size: 15px;
-  line-height: 1;
-  transition: transform 0.15s;
-}
-
-.plink[aria-expanded="true"] .pchev {
-  transform: rotate(90deg);
 }
 
 /* The preview itself, on its own line under the item's title */
@@ -1216,7 +1184,7 @@ details.udiscussed ul.ulist li {
    ========================================================================== */
 
 @media (max-width: 600px) {
-  .row {
+  .rowgrid {
     grid-template-columns: 1fr;
     gap: 4px;
   }

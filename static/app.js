@@ -184,14 +184,14 @@ function dueItemHtml(item) {
   const time = item.date_only ? "All day" : formatTime(new Date(item.due));
   return `
     <details class="ditem" data-key="${esc(item.key)}">
-      <summary class="row ${item.submitted ? "done" : ""}">
+      <summary class="row ${item.submitted ? "done" : ""}"><div class="rowgrid">
         <div class="time">${time}</div>
         <div>
           <span class="dtitle">${esc(item.title)}</span>
           <div class="meta"><span class="tag t-course cc" ${courseColor(item.course_id)}>${esc(item.course)}</span> ${typeLabel}${points}</div>
         </div>
-        <div class="rstat">${statusTag(item)}<span class="chev" aria-hidden="true">▸</span></div>
-      </summary>
+        <div class="rstat">${statusTag(item)}</div>
+      </div></summary>
       <div class="dbody"></div>
     </details>`;
 }
@@ -513,14 +513,14 @@ function courseCardHtml(course, open) {
 
   return `
     <details class="course cc" data-cid="${course.id}" ${courseColor(course.id)} ${open ? "open" : ""}>
-      <summary>
+      <summary><span class="chead">
         ${courseTitleHtml(course)}
         <span class="counts">
           <span class="tag t-course">📊 ${count("slides")}</span>
           <span class="tag t-course">📄 ${count("reading")}</span>
           <a class="tag course-open" href="${esc(course.url)}" target="_blank" onclick="event.stopPropagation()">open ↗</a>
         </span>
-      </summary>
+      </span></summary>
       <div class="cbody">${body}</div>
     </details>`;
 }
@@ -587,10 +587,14 @@ const previewCache = {};
 
 const canPreview = (entry) => Boolean(entry.preview);
 
-/** An item's title: a button that opens its preview, or a normal link. */
+/**
+ * An item's title: a <details> that opens its preview, or a normal link. The
+ * preview itself sits outside the <details> (see previewPanelHtml), so it can
+ * span the whole row under the title, due date and download button.
+ */
 function fileTitleHtml(entry) {
   if (!canPreview(entry)) return externalLink(entry.url, esc(entry.title));
-  return `<button class="plink" aria-expanded="false">${esc(entry.title)} <span class="pchev" aria-hidden="true">▸</span></button>`;
+  return `<details class="plink"><summary>${esc(entry.title)}</summary></details>`;
 }
 
 /** The (initially closed) space under an item where its preview appears. */
@@ -705,11 +709,11 @@ function previewHtml(preview, url) {
   return `${content}<div class="plinks">${links.join("")}</div>`;
 }
 
-/** Open or close the preview under an item. Its content is only fetched the first time. */
-async function togglePreview(button) {
-  const panel = button.closest("li").querySelector(".preview");
-  const open = panel.classList.toggle("hidden") === false;
-  button.setAttribute("aria-expanded", open);
+/** Show or hide the preview under an item as its title opens or closes. Its content is only fetched the first time. */
+async function togglePreview(details) {
+  const panel = details.closest("li").querySelector(".preview");
+  const open = details.open;
+  panel.classList.toggle("hidden", !open);
   if (!open) {
     for (const media of panel.querySelectorAll("video, audio")) media.pause();
     return;
@@ -729,12 +733,15 @@ async function togglePreview(button) {
   }
 }
 
-// Previews can be opened on both tabs.
+// Previews can be opened on both tabs. The "toggle" event doesn't bubble, so it's caught on the way down.
 for (const tab of ["#courses", "#due"]) {
-  $(tab).addEventListener("click", (event) => {
-    const button = event.target.closest(".plink");
-    if (button) togglePreview(button);
-  });
+  $(tab).addEventListener(
+    "toggle",
+    (event) => {
+      if (event.target.matches("details.plink")) togglePreview(event.target);
+    },
+    true,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
