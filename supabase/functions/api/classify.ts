@@ -51,7 +51,7 @@ export function classify(title: string, filename = "", contentType = "", folder 
   return "other";
 }
 
-const NON_CLASS_RE = /exemption|orientation|tutorials?$|career management|class of 20\d\d|python level/i;
+const NON_CLASS_RE = /exemption|orientation|tutorials?$|career management|class of 20\d\d|python level|community citizenship initiative/i;
 
 /** Courses in a real term (e.g. "Fall 2026") are classes; "Default Term" sites aren't. */
 export function isClass(course: any): boolean {
