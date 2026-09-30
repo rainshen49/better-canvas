@@ -9,7 +9,7 @@ export const unescapeHtml = (text: string) => decodeHTML(text);
 /** Remove all tags, leaving the text. */
 export const stripTags = (html: string) => html.replace(/<[^>]+>/g, "");
 
-// The same tags the Python version allowed (the defaults of the nh3/ammonia library).
+// The tags the nh3/ammonia HTML cleaner allows by default.
 const TAGS = [
   "a",
   "abbr",

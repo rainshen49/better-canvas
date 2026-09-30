@@ -8,7 +8,10 @@ import { deadlinesForCourse, discussedForCourse } from "./store.ts";
 
 const DAY_MS = 864e5;
 
-/** The person's active courses, leaving out hidden ones and those whose term ended over a week ago. */
+/**
+ * The person's active courses, leaving out those in IGNORE_COURSES, those not open yet
+ * (restricted by date), and those whose term ended over a week ago.
+ */
 export async function fetchCourses(cv: CanvasClient): Promise<any[]> {
   const courses: any[] = await cv.getAll("/courses", {
     enrollment_state: "active",

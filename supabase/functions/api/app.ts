@@ -12,6 +12,8 @@
 //
 // Each visitor sends their own CourseWorks token in the X-Canvas-Token header.
 // It is used only while answering that one request and is never saved or logged.
+// (Loading /api/data does record the person's CourseWorks name and the time, for
+// analytics; see recordLogin in store.ts.)
 
 import { absUrl, CanvasClient, CanvasError } from "./canvas.ts";
 import { previewKind } from "./classify.ts";

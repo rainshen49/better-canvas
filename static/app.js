@@ -7,9 +7,10 @@
 // The page changes as each update arrives, so results show up before
 // everything has loaded.
 //
-// The last complete set of updates is also saved in the browser. When the page
-// opens again within a day, that saved copy is shown straight away (marked as
-// saved data) while the fresh one loads, and is swapped out once it's ready.
+// The last complete set of updates (one where nothing failed) is also saved in
+// the browser. When the page opens again within a day with the same token, that
+// saved copy is shown straight away (marked as saved data) while the fresh one
+// loads, and is swapped out once it's ready.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers and constants
@@ -63,7 +64,10 @@ let currentRequest = null;
 // Each course gets its own color (a hue), in the order the courses are listed.
 const COURSE_HUES = [212, 150, 28, 282, 350, 184, 48, 250, 100, 322];
 
-/** Attributes that color an element by its course: use the --cc and --ccbg colors from style.css. */
+/**
+ * A style attribute setting this course's hue (--h). Elements with class "cc"
+ * turn it into their --cc and --ccbg colors (see style.css).
+ */
 function courseColor(courseId) {
   const index = DATA?.courses?.findIndex((course) => course.id === courseId) ?? -1;
   if (index < 0) return "";
@@ -175,8 +179,8 @@ function statusTag(item) {
 function dueItemHtml(item) {
   const typeLabel = ITEM_TYPE_LABELS[item.type] || esc(item.type);
   const points = item.points != null ? ` · ${item.points} pts` : "";
-  // Who added a reading's date is shown only when the row is expanded (see fillDetail).
-  // Readings only have a day, not a time.
+  // Who added a reading's date is shown only when the row is expanded, when
+  // hovering over the date (see fillDetail). Readings only have a day, not a time.
   const time = item.date_only ? "All day" : formatTime(new Date(item.due));
   return `
     <details class="ditem" data-key="${esc(item.key)}">
@@ -280,8 +284,8 @@ function assignmentIds(text) {
 }
 
 /**
- * Course files (and syllabus links) whose name, or the module or folder they
- * sit in, mentions the same assignment number as `item`. Files already
+ * Course files (and links from the syllabus) whose name, or the module,
+ * syllabus section or folder they sit in, mentions the same assignment number as `item`. Files already
  * attached to the assignment are left out. Returns null if the course hasn't
  * loaded yet.
  */
@@ -739,9 +743,10 @@ for (const tab of ["#courses", "#due"]) {
 
 // A reading is in one of three states, shared by everyone in its course:
 //   - it has a due date (DATA.mats[course].deadlines[url]),
-//   - it's been discussed in class, so it needs no date (DATA.mats[course].discussed[url]),
+//   - it's been marked as discussed in class, so it needs no date
+//     (DATA.mats[course].discussed[url]). The page calls this "Hidden",
 //   - or neither, so it's listed under "Readings without a due date" on the Due soon tab.
-// Giving a discussed reading a date unmarks it, and marking a reading as discussed removes its date.
+// Giving a hidden reading a date unhides it, and hiding a reading removes its date.
 
 const readingDeadline = (courseId, url) => DATA.mats[courseId]?.deadlines?.[url];
 const readingDiscussed = (courseId, url) => DATA.mats[courseId]?.discussed?.[url];
@@ -749,7 +754,7 @@ const readingDiscussed = (courseId, url) => DATA.mats[courseId]?.discussed?.[url
 /**
  * The box holding a reading's due date and its buttons. The same reading can
  * have a box on both tabs. Hiding a reading only matters on the "Due soon" tab,
- * so only boxes there (canHide) offer it.
+ * so only boxes there (canHide) offer Hide and Unhide.
  */
 function readingDueBoxHtml(courseId, url, canHide = false) {
   const hide = canHide ? ` data-hide="1"` : "";
@@ -1010,14 +1015,15 @@ for (const tab of ["#courses", "#due"]) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Each class gets a card listing its readings that have no date and aren't
-// marked as discussed in class. Only the first few are shown until "Show all" is clicked.
+// hidden. Only the first few are shown until "N more" is clicked. Hidden
+// readings are listed under a collapsed "N hidden" section at the bottom.
 const UNDATED_SHOWN = 5;
-// Cards where "Show all" was clicked, and cards whose "discussed in class" list is open, so
+// Cards where "N more" was clicked, and cards whose "N hidden" section is open, so
 // they stay that way when the card is redrawn.
 const undatedShowAll = new Set();
 const undatedDiscussedOpen = new Set();
 
-/** A class's readings, split into those still needing a date and those discussed in class. Each link counts once. */
+/** A class's readings, split into those still needing a date and those hidden. Each link counts once. */
 function undatedReadings(course) {
   const seen = new Set();
   const needDate = [];
@@ -1232,14 +1238,14 @@ $("#signout").onclick = () => {
 // Status bar
 // ─────────────────────────────────────────────────────────────────────────────
 
+let loadState = "off";
+
 /**
  * Update the status bar.
  * state:    "loading", "done", "failed", or "off" (hidden; used only on the login screen)
  * message:  text to show (left as is if not given)
  * fraction: how full the progress bar is, from 0 to 1 (left as is if not given)
  */
-let loadState = "off";
-
 function setLoading(state, message, fraction) {
   loadState = state;
   const bar = $("#loadbar");

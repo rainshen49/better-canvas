@@ -6,8 +6,9 @@
 // Settings (environment variables): PORT (8765), HOST (0.0.0.0, so phones and
 // other laptops on your network can open it; 127.0.0.1 allows only this
 // computer), NO_BROWSER (don't open a browser tab), plus everything in
-// supabase/functions/api/config.ts. Reading due dates are saved in
-// reading_deadlines.db here, or in Postgres if DATABASE_URL is set.
+// supabase/functions/api/config.ts. Reading due dates (and the login record) are
+// saved in reading_deadlines.db here (or the file named by DEADLINES_DB), or in
+// Postgres if DATABASE_URL is set.
 
 import { DatabaseSync } from "node:sqlite";
 import { handler } from "./supabase/functions/api/app.ts";

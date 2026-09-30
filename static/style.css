@@ -398,7 +398,7 @@ body.showing-saved .rdue-btn {
   margin: 0 0 14px;
 }
 
-/* Note that reading due dates come from classmates */
+/* Callout asking classmates to add reading due dates */
 .note {
   display: flex;
   flex-wrap: wrap;
@@ -1173,7 +1173,7 @@ ul.ulist .ctx {
   font-size: 12px;
 }
 
-/* Readings past the first few stay hidden until "Show all" */
+/* Readings past the first few stay hidden until "N more" is clicked */
 .ucourse:not(.show-all) li.extra {
   display: none;
 }

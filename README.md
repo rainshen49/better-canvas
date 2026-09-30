@@ -1,44 +1,25 @@
 # Better Canvas
 
-A simpler view of Columbia CourseWorks: what's due soon and every class's slides and readings on one page, plus reading due dates shared with classmates.
+A simpler view of Columbia CourseWorks. CourseWorks spreads a class across modules, pages, files and the syllabus, and never says when readings are due. Better Canvas puts what matters on one page:
 
-## Features
+- **What's due soon** across all your classes, with each assignment's details and the course files that go with it.
+- **Every class's slides, readings and recordings** in one place, searchable and previewable without leaving the page.
+- **Reading due dates, shared with classmates.** Professors rarely put readings on the calendar, so anyone in a course can date a reading (or mark it as not needing one) and everyone else sees it.
 
-**Due soon**
-- Everything due in the next 14 days across your classes, grouped by day, with anything due within 2 days flagged.
-- Click an item to see its full description, points, attempts and dates, attached files, and related course files (e.g. "HW02" finds `HW02.pdf`).
-- Readings that classmates have given a due date show up in the list too, marked "All day".
+Each person logs in with their own CourseWorks access token.
 
-**Readings without a due date**
-- At the bottom of Due soon, each class lists its readings that nobody has dated yet.
-- Give one a date with **+ Due date** (any of the next 10 weekdays), or mark it **✓ Discussed** if it was covered in class and doesn't need one.
-- Both are shared with everyone in the course, along with the name of whoever set them. Anyone can change them or undo.
-- Changes show up instantly. If a change can't be saved, it's undone with a short message.
+## Run it on your computer
 
-**Slides & readings**
-- Every class's slides, readings and recordings, organized by module, with filters (Slides / Readings / Recordings / Other) and a search box.
-- Click a file to preview it right in the page: PDFs, Word and PowerPoint files, images, videos, text files, CourseWorks pages and YouTube links.
-- Download any file with the ⬇ icon.
-- Shortcuts to each class's Echo360, Video Library, Ed and Zoom.
+```bash
+brew install deno        # once
+cd ~/Desktop/dev/canvas
+deno task start          # opens http://localhost:8765
+```
 
-**Other**
-- Log in once with a CourseWorks access token. Your browser remembers it until you log out.
-- Works on phones, and follows your system's light or dark mode.
+To log in, create a token in CourseWorks (**Account → Settings → + New Access Token**) and paste it in. Locally, reading due dates are saved in `reading_deadlines.db`, separate from the shared online version. Settings are listed at the top of `dev.ts` and in `supabase/functions/api/config.ts`.
 
-## How to run it on your computer
+## How it's hosted
 
-1. Install Deno once: `brew install deno`
-2. Start the app:
-   ```bash
-   cd ~/Desktop/dev/canvas
-   deno task start
-   ```
-3. It opens http://localhost:8765. To log in, create a token in CourseWorks (**Account → Settings → + New Access Token**) and paste it in.
-
-Stop it with Ctrl+C. When run this way, reading due dates are saved in `reading_deadlines.db` in this folder, separate from the shared online version.
-
-## What it's built on
-
-- **GitHub** holds the code, and **GitHub Pages** hosts the page people open (https://rainshen49.github.io/better-canvas/). Pushing to `main` republishes the page automatically.
-- **Supabase** runs the part that talks to CourseWorks (an Edge Function called `api`) and stores everyone's shared reading due dates in its database. After changing that code, update it with `supabase functions deploy api`.
-- **CourseWorks** is where all the course information comes from. Each person uses their own token, which is only sent to CourseWorks and never saved.
+- **GitHub Pages** serves the page (https://rainshen49.github.io/better-canvas/). Pushing changes to `static/` on `main` republishes it.
+- **Supabase** runs the server (an Edge Function called `api`) that talks to CourseWorks, and stores the shared reading due dates. Deploy changes with `deno task deploy`.
+- **Privacy:** the token stays in the person's browser and is only used by the server to talk to CourseWorks; it's never saved or logged. For usage stats, the server records each person's name and when they last opened the app.
