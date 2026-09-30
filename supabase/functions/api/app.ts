@@ -123,8 +123,8 @@ async function apiData(req: Request): Promise<Response> {
   const cv = new CanvasClient(tokenFrom(req));
   let me, courses;
   try {
-    me = await cv.getAll("/users/self/profile"); // checks the token works before sending anything
-    courses = await fetchCourses(cv);
+    // Both at once; the profile also checks the token works before anything is sent.
+    [me, courses] = await Promise.all([cv.getAll("/users/self/profile", {}, true), fetchCourses(cv)]);
   } catch (e) {
     if (e instanceof CanvasError && e.status === 401) throw new NeedToken(BAD_TOKEN);
     return json({ error: String((e as Error)?.message ?? e) });
@@ -181,8 +181,11 @@ async function setReading(req: Request): Promise<Response> {
   const cv = new CanvasClient(token);
   let me, materials;
   try {
-    me = await cv.getAll("/users/self/profile");
-    const course = await cv.safe(`/courses/${courseId}`, { "include[]": ["term"] });
+    let course;
+    [me, course] = await Promise.all([
+      cv.getAll("/users/self/profile"),
+      cv.safe(`/courses/${courseId}`, { "include[]": ["term"] }),
+    ]);
     if (!course) return refuse("You don't seem to be in this course.", 403);
     materials = await fetchMaterials(cv, course);
   } catch (e) {

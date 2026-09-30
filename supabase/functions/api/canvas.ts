@@ -14,18 +14,24 @@ export function absUrl(url: string | null | undefined): string | null {
   return url.startsWith("http") ? url : BASE + url;
 }
 
-/** Lets at most `limit` tasks run at once. */
+/**
+ * Lets at most `limit` tasks run at once. Waiting tasks marked `urgent` start
+ * before the others, so "Due soon" isn't stuck behind every course's files.
+ */
 function limiter(limit: number) {
   let running = 0;
-  const waiting: (() => void)[] = [];
-  return async <T>(task: () => Promise<T>): Promise<T> => {
-    if (running >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
-    running++;
+  const urgentQueue: (() => void)[] = [];
+  const queue: (() => void)[] = [];
+  return async <T>(task: () => Promise<T>, urgent = false): Promise<T> => {
+    if (running < limit) running++;
+    else await new Promise<void>((resolve) => (urgent ? urgentQueue : queue).push(resolve));
     try {
       return await task();
     } finally {
-      running--;
-      waiting.shift()?.();
+      // Hand this slot straight to the next task, so nothing can sneak in between.
+      const next = urgentQueue.shift() ?? queue.shift();
+      if (next) next();
+      else running--;
     }
   };
 }
@@ -75,14 +81,16 @@ export class CanvasClient {
 
   /**
    * Fetch something from CourseWorks. Lists that come in several pages are
-   * fetched page by page (up to 50) and combined.
+   * fetched page by page (up to 50) and combined. `urgent` requests skip ahead
+   * of the others waiting their turn.
    */
-  async getAll(path: string, params: Params = {}): Promise<any> {
+  async getAll(path: string, params: Params = {}, urgent = false): Promise<any> {
     let url: string | null = withParams(`${BASE}/api/v1${path}`, { per_page: 100, ...params });
     const out: unknown[] = [];
     for (let page = 0; page < 50 && url; page++) {
-      const response: Response = await this.#limit(() =>
-        fetch(url!, { headers: this.#headers(), signal: this.abort.signal })
+      const response: Response = await this.#limit(
+        () => fetch(url!, { headers: this.#headers(), signal: this.abort.signal }),
+        urgent,
       );
       if (response.status >= 400) {
         throw new CanvasError(response.status, (await response.text()).slice(0, 200));
@@ -96,9 +104,9 @@ export class CanvasClient {
   }
 
   /** Like getAll, but returns null instead of failing, e.g. when a course hides its Files tab from students. */
-  async safe(path: string, params: Params = {}): Promise<any> {
+  async safe(path: string, params: Params = {}, urgent = false): Promise<any> {
     try {
-      return await this.getAll(path, params);
+      return await this.getAll(path, params, urgent);
     } catch (e) {
       if (this.abort.signal.aborted) throw e;
       return null;

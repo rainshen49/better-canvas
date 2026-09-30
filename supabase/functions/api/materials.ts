@@ -17,7 +17,7 @@ export async function fetchCourses(cv: CanvasClient): Promise<any[]> {
     enrollment_state: "active",
     "include[]": ["term"],
     "state[]": ["available"],
-  });
+  }, true);
   const ignore = IGNORE_COURSES.map((x) => x.toLowerCase());
   const now = Date.now();
   return courses.filter((c) => {
@@ -102,13 +102,26 @@ export async function fetchMaterials(cv: CanvasClient, course: any) {
   const modulesOut: { name: string; items: any[] }[] = [];
   const seenFileIds = new Set<number>();
 
-  const modules: any[] = (await cv.safe(`/courses/${cid}/modules`, { "include[]": ["items"] })) ?? [];
-  for (const m of modules) {
-    if (SKIP_MODULE_RE.test(m.name ?? "")) continue;
+  // Ask CourseWorks for everything at once rather than one after another.
+  // Hidden or missing parts come back as null.
+  const [modulesRaw, info, tabsRaw, files, folderList, deadlines, discussed] = await Promise.all([
+    cv.safe(`/courses/${cid}/modules`, { "include[]": ["items"] }),
+    cv.safe(`/courses/${cid}`, { "include[]": ["syllabus_body"] }),
+    cv.safe(`/courses/${cid}/tabs`),
+    cv.safe(`/courses/${cid}/files`, { sort: "updated_at", order: "desc" }) as Promise<any[] | null>,
+    cv.safe(`/courses/${cid}/folders`),
+    deadlinesForCourse(cid),
+    discussedForCourse(cid),
+  ]);
+  const modules: any[] = (modulesRaw ?? []).filter((m: any) => !SKIP_MODULE_RE.test(m.name ?? ""));
+  // CourseWorks leaves out the item list for big modules, so fetch those separately (in parallel too)
+  const moduleItems: any[][] = await Promise.all(
+    modules.map(async (m) => m.items ?? (await cv.safe(`/courses/${cid}/modules/${m.id}/items`)) ?? []),
+  );
+
+  for (const [i, m] of modules.entries()) {
     const entries: any[] = [];
-    // CourseWorks leaves out the item list for big modules, so fetch it separately
-    const items: any[] = m.items ?? (await cv.safe(`/courses/${cid}/modules/${m.id}/items`)) ?? [];
-    for (const it of items) {
+    for (const it of moduleItems[i]) {
       const type = it.type;
       if (type === "SubHeader") {
         entries.push({ kind: "header", title: it.title });
@@ -138,25 +151,21 @@ export async function fetchMaterials(cv: CanvasClient, course: any) {
 
   // Links posted on the Syllabus page (some professors put everything there)
   const syllabus: { name: string; items: any[] }[] = [];
-  const info = (await cv.safe(`/courses/${cid}`, { "include[]": ["syllabus_body"] })) ?? {};
-  for (const section of parseSyllabus(info.syllabus_body)) {
+  for (const section of parseSyllabus(info?.syllabus_body)) {
     for (const it of section.items) if (it.file_id) seenFileIds.add(it.file_id);
     syllabus.push({ name: "📋 " + section.name, items: section.items });
   }
 
   // Shortcut tabs from the course menu (Echo360, Video Library, Ed, Zoom)
-  const tabs: any[] = (await cv.safe(`/courses/${cid}/tabs`)) ?? [];
-  const quick = tabs
+  const quick = ((tabsRaw ?? []) as any[])
     .filter((t) => t.type === "external" && !t.hidden && QUICK_TAB_RE.test(t.label ?? ""))
     .map((t) => ({ label: t.label, url: absUrl(t.html_url) }));
 
   // Files not already linked from a module or the syllabus (e.g. a "Slides" folder).
   // Hidden and locked files are skipped.
   const loose: any[] = [];
-  const files: any[] | null = await cv.safe(`/courses/${cid}/files`, { sort: "updated_at", order: "desc" });
   if (files) {
-    const folderList: any[] = (await cv.safe(`/courses/${cid}/folders`)) ?? [];
-    const folders = new Map<number, string>(folderList.map((f) => [
+    const folders = new Map<number, string>(((folderList ?? []) as any[]).map((f) => [
       f.id,
       (f.full_name ?? "").replace("course files/", "").replace("course files", ""),
     ]));
@@ -190,7 +199,6 @@ export async function fetchMaterials(cv: CanvasClient, course: any) {
   }
   for (const entry of loose) addPreview(entry, fileMeta);
 
-  const [deadlines, discussed] = await Promise.all([deadlinesForCourse(cid), discussedForCourse(cid)]);
   const [code, name] = shortNames(course);
   return {
     id: cid,

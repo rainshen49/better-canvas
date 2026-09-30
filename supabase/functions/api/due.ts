@@ -50,7 +50,7 @@ export async function fetchDue(cv: CanvasClient, courses: any[]) {
   const planner: any[] | null = await cv.safe("/planner/items", {
     start_date: canvasTime(now),
     end_date: canvasTime(end),
-  });
+  }, true);
   if (planner !== null) {
     for (const p of planner) {
       const type = p.plannable_type;
@@ -83,7 +83,7 @@ export async function fetchDue(cv: CanvasClient, courses: any[]) {
       const res: any[] = (await cv.safe(`/courses/${c.id}/assignments`, {
         bucket: "upcoming",
         "include[]": ["submission"],
-      })) ?? [];
+      }, true)) ?? [];
       return res
         .filter((a) => {
           if (!a.due_at) return false;
@@ -181,7 +181,7 @@ function filesInHtml(html: string) {
 
 export async function fetchDetail(cv: CanvasClient, item: any) {
   const path = DETAIL_PATHS[item.type].replace("{cid}", item.course_id).replace("{pid}", item.pid);
-  const d = await cv.getAll(path);
+  const d = await cv.getAll(path, {}, true);
   const raw: string = d.description || d.message || d.body || "";
   const files = filesInHtml(raw);
   for (const a of d.attachments ?? []) { // files attached to a discussion post
@@ -193,7 +193,7 @@ export async function fetchDetail(cv: CanvasClient, item: any) {
   // Link text is often just "notes" or "here", so look up each file's real name
   // and type. The page uses these to decide whether it can show a preview.
   await Promise.all(unique.map(async (f) => {
-    const meta = f.id ? await cv.safe(`/files/${f.id}`) : null;
+    const meta = f.id ? await cv.safe(`/files/${f.id}`, {}, true) : null;
     if (meta && typeof meta === "object" && !Array.isArray(meta)) {
       f.filename = meta.display_name ?? null;
       f.mime = meta["content-type"] ?? null;
