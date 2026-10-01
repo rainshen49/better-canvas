@@ -31,7 +31,7 @@ function externalLink(url, text, className = "") {
   return `<a${cls} href="${esc(url)}" target="_blank" rel="noopener">${text}</a>`;
 }
 
-const CATEGORY_ICONS = { slides: "📊", reading: "📄", video: "🎬", other: "🔗" };
+const CATEGORY_ICONS = { slides: "📽️", reading: "📄", video: "🎬", other: "🔗" };
 
 const ITEM_TYPE_LABELS = {
   assignment: "Assignment",
@@ -343,7 +343,7 @@ function attachedFileHtml(file) {
 }
 
 function relatedFileHtml(entry, courseId) {
-  const icon = entry.cat === "slides" ? "📊" : "📎";
+  const icon = entry.cat === "slides" ? "📽️" : "📎";
   return `
     <li>
       <span class="ic">${icon}</span>${fileTitleHtml(entry)}<span class="ctx">${esc(entry.ctx || "")}</span>${downloadButton(downloadUrl(entry.url))}${previewPanelHtml(entry, courseId)}
@@ -516,7 +516,7 @@ function courseCardHtml(course, open) {
       <summary><span class="chead">
         ${courseTitleHtml(course)}
         <span class="counts">
-          <span class="tag t-course">📊 ${count("slides")}</span>
+          <span class="tag t-course">📽️ ${count("slides")}</span>
           <span class="tag t-course">📄 ${count("reading")}</span>
           <a class="tag course-open" href="${esc(course.url)}" target="_blank" onclick="event.stopPropagation()">open ↗</a>
         </span>
