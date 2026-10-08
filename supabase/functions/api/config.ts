@@ -9,7 +9,7 @@ const env = (name: string) => Deno.env.get(name)?.trim() || undefined;
 export const BASE = (env("CANVAS_BASE") ?? "https://courseworks2.columbia.edu").replace(/\/+$/, "");
 
 /** How many days ahead "Due soon" looks, for both CourseWorks items and classmates' reading dates. */
-export const DAYS_AHEAD = Number(env("DAYS_AHEAD") ?? "14");
+export const DAYS_AHEAD = Number(env("DAYS_AHEAD") ?? "21");
 
 /**
  * A reading's due date can be one of the next this-many weekdays (Mon–Fri),
