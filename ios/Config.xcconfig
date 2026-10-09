@@ -1,0 +1,4 @@
+// Build settings that aren't in the project file.
+// The server address lives in Config.local.xcconfig, which is not committed (copy Config.local.example.xcconfig).
+BETTER_CANVAS_API =
+#include? "Config.local.xcconfig"

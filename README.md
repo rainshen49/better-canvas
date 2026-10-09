@@ -23,3 +23,12 @@ To log in, create a token in CourseWorks (**Account → Settings → + New Acces
 - **GitHub Pages** serves the page (https://rainshen49.github.io/better-canvas/). Pushing changes to `static/` on `main` republishes it.
 - **Supabase** runs the server (an Edge Function called `api`) that talks to CourseWorks, and stores the shared reading due dates. Deploy changes with `deno task deploy`.
 - **Privacy:** the token stays in the person's browser and is only used by the server to talk to CourseWorks; it's never saved or logged. For usage stats, the server records each person's name and when they last opened the app.
+
+## iPhone app
+
+`ios/` has a native SwiftUI version of the page: the same "Due soon" and "Slides & readings" tabs, previews for files and pages, and shared reading due dates. It talks to the same hosted server as the web page.
+
+1. Open `ios/BetterCanvas.xcodeproj` in Xcode and run it. To put it on your own iPhone, pick your team under **Signing & Capabilities**.
+2. The server address isn't in the source. Copy `ios/Config.local.example.xcconfig` to `ios/Config.local.xcconfig` (ignored by git) and put your Supabase project's address in it (the same address as `BETTER_CANVAS_API` above). Without that file the app shows an error instead of loading.
+3. Log in with a CourseWorks access token, as on the web. It's kept in the iPhone's Keychain.
+

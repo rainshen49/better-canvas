@@ -7,3 +7,14 @@ supabase/.temp/
 supabase/.branches/
 # The earlier Python version's environment, if still on disk
 .venv/
+
+# Xcode
+ios/**/xcuserdata/
+ios/build/
+DerivedData/
+
+# macOS
+.DS_Store
+
+# The iOS app's server address
+ios/Config.local.xcconfig
