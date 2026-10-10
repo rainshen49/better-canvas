@@ -543,6 +543,12 @@ summary::marker {
   background: var(--card);
 }
 
+/* 💬 beside a collapsed item's title when it has a note */
+.nind {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
 /* The note classmates leave on an item, under its details */
 .dnote {
   display: flex;

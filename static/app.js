@@ -190,7 +190,7 @@ function dueItemHtml(item) {
       <summary class="row ${item.submitted ? "done" : ""}"><div class="rowgrid">
         <div class="time">${time}</div>
         <div>
-          <span class="dtitle">${esc(item.title)}</span>
+          <span class="dtitle">${esc(item.title)}</span>${noteIndicatorHtml(item.key)}
           <div class="meta"><span class="tag t-course cc" ${courseColor(item.course_id)}>${esc(item.course)}</span> ${typeLabel}${points}</div>
         </div>
         <div class="rstat">${statusTag(item)}</div>
@@ -443,6 +443,20 @@ function noteBoxHtml(item) {
   return `<div class="dnote" data-key="${esc(item.key)}" data-cid="${item.course_id}">${noteInnerHtml(item.key)}</div>`;
 }
 
+/** A small 💬 next to a collapsed item's title when it has a note (the note itself is only in the expanded item). */
+function noteIndicatorHtml(key) {
+  return DATA?.notes?.[key] ? ` <span class="nind" title="Has a note" aria-label="Has a note">💬</span>` : "";
+}
+
+/** Add or remove the 💬 on every row to match DATA.notes. */
+function updateNoteIndicators() {
+  for (const details of $$("details.ditem")) {
+    const title = details.querySelector(".dtitle");
+    title.nextElementSibling?.classList.contains("nind") && title.nextElementSibling.remove();
+    title.insertAdjacentHTML("afterend", noteIndicatorHtml(details.dataset.key));
+  }
+}
+
 function noteInnerHtml(key) {
   const errorSlot = `<span class="note-err" role="alert"></span>`;
   if (DATA.notes === false) return `<span class="note-none">Couldn't load notes.</span>`;
@@ -465,6 +479,7 @@ function noteInnerHtml(key) {
 
 function redrawNote(box) {
   box.innerHTML = noteInnerHtml(box.dataset.key);
+  updateNoteIndicators();
 }
 
 /** Redraw every note box, e.g. when the notes arrive. Editors being typed in are left alone. */
@@ -472,6 +487,7 @@ function redrawNotes() {
   for (const box of $$(".dnote")) {
     if (!box.querySelector(".note-input")) redrawNote(box);
   }
+  updateNoteIndicators();
 }
 
 function openNoteEditor(box) {

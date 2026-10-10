@@ -5,7 +5,7 @@ A simpler view of Columbia CourseWorks. CourseWorks spreads a class across modul
 - **What's due soon** across all your classes, with each assignment's details and the course files that go with it.
 - **Every class's slides, readings and recordings** in one place, searchable and previewable without leaving the page.
 - **Reading due dates, shared with classmates.** Professors rarely put readings on the calendar, so anyone in a course can date a reading (or mark it as not needing one) and everyone else sees it.
-- **Short notes, shared with classmates.** Open any assignment, quiz, discussion, page or reading on the Due soon tab and add a note of up to 149 characters (a tip, a warning, which pages matter). Everyone in the class sees it when they open that item, and anyone can edit or delete it. The iPhone app doesn't show notes yet.
+- **Short notes, shared with classmates.** Open any assignment, quiz, discussion, page or reading on the Due soon tab and add a note of up to 149 characters (a tip, a warning, which pages matter). A small 💬 beside the title shows which items have one. Everyone in the class sees the note when they open that item, and anyone can edit or delete it. The iPhone app doesn't show notes yet.
 
 Each person logs in with their own CourseWorks access token.
 
