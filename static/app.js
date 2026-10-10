@@ -50,6 +50,9 @@ const MS_PER_DAY = 864e5;
 // if it's a weekday (the server checks this too).
 const PICK_WEEKDAYS = 10;
 
+// The longest note a classmate can leave on a due item (the server checks this too).
+const NOTE_MAX = 149;
+
 // Where the API is: "" for the same server (running locally), or the Supabase
 // Edge Function's address when the page is on GitHub Pages. Set in config.js.
 const API = String(window.BETTER_CANVAS_API || "").replace(/\/+$/, "");
@@ -192,7 +195,7 @@ function dueItemHtml(item) {
         </div>
         <div class="rstat">${statusTag(item)}</div>
       </div></summary>
-      <div class="dbody"></div>
+      <div class="dbody"><div class="dmain"></div>${noteBoxHtml(item)}</div>
     </details>`;
 }
 
@@ -365,7 +368,7 @@ function readingLinkHtml(item) {
 }
 
 function fillDetail(key) {
-  const body = document.querySelector(`details.ditem[data-key="${CSS.escape(key)}"] .dbody`);
+  const body = document.querySelector(`details.ditem[data-key="${CSS.escape(key)}"] .dmain`);
   if (!body) return;
 
   const item = DATA.due.find((i) => i.key === key);
@@ -421,6 +424,141 @@ function fillDetail(key) {
 function refreshOpenDetails() {
   for (const details of $$("details.ditem[open]")) fillDetail(details.dataset.key);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notes on due items (shared by everyone in a course)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Anyone can leave one short note on an assignment, quiz, discussion, page or
+// reading, and anyone in the course can change or delete it. Notes are only
+// shown inside the expanded item. DATA.notes maps an item's key to
+// {note, by, at}; it's null until the server has sent them, and false if it couldn't.
+
+/** Personal to-dos and peer reviews belong to one person, so they don't get notes. */
+const NOTE_TYPES = new Set(["assignment", "quiz", "discussion_topic", "wiki_page", "reading"]);
+
+/** The note box under an item's details: the note and its buttons, or "+ Add note". */
+function noteBoxHtml(item) {
+  if (!NOTE_TYPES.has(item.type)) return "";
+  return `<div class="dnote" data-key="${esc(item.key)}" data-cid="${item.course_id}">${noteInnerHtml(item.key)}</div>`;
+}
+
+function noteInnerHtml(key) {
+  const errorSlot = `<span class="note-err" role="alert"></span>`;
+  if (DATA.notes === false) return `<span class="note-none">Couldn't load notes.</span>`;
+  if (!DATA.notes) return ""; // still on its way
+  const note = DATA.notes[key];
+  if (!note) {
+    return `<button class="rdue-btn" data-act="note-edit">+ Add note</button>${errorSlot}`;
+  }
+  return `
+    <div class="inote">
+      <span class="inote-text">${esc(note.note)}</span>
+      <span class="inote-by" title="${formatDateTime(note.at)}">— ${esc(note.by)}</span>
+    </div>
+    <span class="note-btns">
+      <button class="rdue-btn" data-act="note-edit">Edit</button>
+      <button class="rdue-btn danger" data-act="note-delete">Delete</button>
+    </span>
+    ${errorSlot}`;
+}
+
+function redrawNote(box) {
+  box.innerHTML = noteInnerHtml(box.dataset.key);
+}
+
+/** Redraw every note box, e.g. when the notes arrive. Editors being typed in are left alone. */
+function redrawNotes() {
+  for (const box of $$(".dnote")) {
+    if (!box.querySelector(".note-input")) redrawNote(box);
+  }
+}
+
+function openNoteEditor(box) {
+  const current = DATA.notes?.[box.dataset.key]?.note ?? "";
+  box.innerHTML = `
+    <form class="note-form">
+      <input class="note-input" type="text" maxlength="${NOTE_MAX}" value="${esc(current)}"
+             placeholder="A short note for your classmates" aria-label="Note">
+      <button class="rdue-btn primary" type="submit">Save</button>
+      <button class="rdue-btn icon" type="button" data-act="note-cancel" aria-label="Cancel" title="Cancel">✕</button>
+      <span class="note-count"></span>
+    </form>
+    <span class="note-err" role="alert"></span>`;
+  const input = box.querySelector(".note-input");
+  const count = box.querySelector(".note-count");
+  const update = () => (count.textContent = `${[...input.value].length}/${NOTE_MAX}`);
+  input.addEventListener("input", update);
+  update();
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+/** Save a note (text), or delete it (null). The box shows the result once the server has answered. */
+async function saveNote(box, note) {
+  const key = box.dataset.key;
+  const courseId = Number(box.dataset.cid);
+  const slot = box.querySelector(".note-err");
+  const fail = (message) => {
+    const target = box.querySelector(".note-err");
+    if (target) target.textContent = `Not saved: ${message}`;
+    for (const button of box.querySelectorAll("button")) button.disabled = false;
+  };
+  if (showingSaved) { // the saved copy is about to be replaced, which would undo the change on screen
+    if (slot) slot.textContent = "Still refreshing. Try again in a moment.";
+    return;
+  }
+  if (slot) slot.textContent = "";
+  for (const button of box.querySelectorAll("button")) button.disabled = true;
+
+  let result;
+  try {
+    const response = await fetch(`${API}/api/note`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Canvas-Token": getToken() },
+      body: JSON.stringify({ course_id: courseId, key, note }),
+    });
+    result = await response.json().catch(() => ({ error: "HTTP " + response.status }));
+  } catch (e) {
+    result = { error: "Couldn't reach the server." };
+  }
+  if (result.need_token) {
+    setToken("");
+    return showAuth(result.error);
+  }
+  if (result.error) return fail(result.error);
+  if (!DATA?.notes) return;
+  if (result.note) DATA.notes[key] = result.note;
+  else delete DATA.notes[key];
+  redrawNote(box);
+}
+
+$("#due").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-act^='note-']");
+  const box = button?.closest(".dnote");
+  if (!box || button.disabled) return;
+  const action = button.dataset.act;
+  if (action === "note-edit") openNoteEditor(box);
+  else if (action === "note-cancel") redrawNote(box);
+  else if (action === "note-delete") saveNote(box, null);
+});
+
+$("#due").addEventListener("submit", (event) => {
+  const box = event.target.closest(".dnote");
+  if (!box) return;
+  event.preventDefault();
+  const text = box.querySelector(".note-input").value.replace(/\s+/g, " ").trim();
+  if (!text) { // saving nothing: delete the note if there was one
+    if (DATA.notes?.[box.dataset.key]) return saveNote(box, null);
+    return redrawNote(box);
+  }
+  saveNote(box, text);
+});
+
+$("#due").addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !event.target.closest(".note-input")) return;
+  redrawNote(event.target.closest(".dnote"));
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "Slides & readings" tab
@@ -1294,11 +1432,12 @@ function onEvent(event) {
         courses: event.courses,
         due: null,
         details: {}, // due item → its details (or an error)
+        notes: null, // item key → its note; null until they arrive, false if they couldn't load
         mats: {}, // course id → its files and links
         got: 0, // updates received so far
-        // Updates expected: the due list + one per course. One per due item
+        // Updates expected: the due list, the notes + one per course. One per due item
         // with details is added when the due list arrives.
-        total: event.courses.length + 1,
+        total: event.courses.length + 2,
         finished: false,
       };
       $("#sub").textContent = headerSubtitle();
@@ -1316,6 +1455,18 @@ function onEvent(event) {
     case "due_detail":
       DATA.details[event.key] = event.error ? { error: event.error } : event.detail;
       fillDetail(event.key);
+      DATA.got++;
+      break;
+
+    case "notes":
+      DATA.notes = event.notes || {};
+      redrawNotes();
+      DATA.got++;
+      break;
+
+    case "notes_error":
+      DATA.notes = false;
+      redrawNotes();
       DATA.got++;
       break;
 
@@ -1523,7 +1674,7 @@ async function load() {
 
   let response;
   try {
-    response = await fetch(`${API}/api/data`, {
+    response = await fetch(`${API}/api/data?notes=1`, {
       headers: { "X-Canvas-Token": token },
       signal: request.signal,
     });

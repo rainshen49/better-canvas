@@ -2,6 +2,7 @@
 //
 //   GET  /api/data              streams everything the page shows (below)
 //   POST /api/reading-deadline  sets or removes a reading's due date, or marks it as discussed
+//   POST /api/note              sets, replaces or deletes the short note on a due item
 //   GET  /api/file-preview      how a file can be previewed
 //   GET  /api/file-content      a PDF or text file, passed through for the preview
 //   GET  /api/page              a CourseWorks page's content, cleaned
@@ -21,7 +22,10 @@ import { ALLOWED_ORIGINS, DAYS_AHEAD, PICK_WEEKDAYS } from "./config.ts";
 import { fetchDetail, fetchDue, nextWeekdays, today } from "./due.ts";
 import { allEntries, courseSummary, fetchCourses, fetchMaterials } from "./materials.ts";
 import { sanitize } from "./sanitize.ts";
-import { recordLogin, setDeadline, setDiscussed } from "./store.ts";
+import { notesForCourses, recordLogin, setDeadline, setDiscussed, setNote } from "./store.ts";
+
+// Longest note, in characters (so "less than 150").
+const NOTE_MAX = 149;
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const BAD_TOKEN = "That token didn't work. It may be mistyped, expired or revoked.";
@@ -67,8 +71,10 @@ function corsHeaders(req: Request): Record<string, string> {
  * Send updates to the browser, one JSON object per line, as each piece of data
  * is ready: "start" (the course list) first; then "due" / "due_error", "course" /
  * "course_error" and "due_detail" in whatever order they finish; "done" last.
+ * Only when `withNotes` is set (the page asks with ?notes=1) is there also a
+ * "notes" / "notes_error" update; older clients don't know it and would treat it as an error.
  */
-function streamEvents(cv: CanvasClient, me: any, courses: any[]): ReadableStream<Uint8Array> {
+function streamEvents(cv: CanvasClient, me: any, courses: any[], withNotes: boolean): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
@@ -105,6 +111,14 @@ function streamEvents(cv: CanvasClient, me: any, courses: any[]): ReadableStream
         }
       }, (error) => send({ type: "due_error", error }));
 
+      if (withNotes) {
+        run(
+          () => notesForCourses(courses.map((c) => c.id)),
+          (notes) => send({ type: "notes", notes }),
+          (error) => send({ type: "notes_error", error }),
+        );
+      }
+
       for (const c of courses) {
         run(
           () => fetchMaterials(cv, c),
@@ -119,7 +133,7 @@ function streamEvents(cv: CanvasClient, me: any, courses: any[]): ReadableStream
   });
 }
 
-async function apiData(req: Request): Promise<Response> {
+async function apiData(req: Request, url: URL): Promise<Response> {
   const cv = new CanvasClient(tokenFrom(req));
   let me, courses;
   try {
@@ -133,7 +147,7 @@ async function apiData(req: Request): Promise<Response> {
   // if it fails, the page still loads normally.
   const name = me.name || me.short_name;
   if (name) recordLogin(name).catch((e) => console.error(`Couldn't record login: ${errorName(e)}`));
-  return new Response(streamEvents(cv, me, courses), {
+  return new Response(streamEvents(cv, me, courses, url.searchParams.get("notes") === "1"), {
     headers: { "Content-Type": "application/x-ndjson", ...NO_STORE, "X-Accel-Buffering": "no" },
   });
 }
@@ -210,6 +224,61 @@ async function setReading(req: Request): Promise<Response> {
     discussed = await setDiscussed(courseId, url, reading.title, discuss, userId, name);
   }
   return json({ deadline, discussed });
+}
+
+// ─── POST /api/note ──────────────────────────────────────────────────────────
+
+// The items that can carry a note: the ones the Due soon tab shows with a detail
+// panel, plus classmate-dated readings. (Personal to-dos and peer reviews belong to one person.)
+const NOTE_KEY = /^(?:(?:assignment|quiz|discussion_topic|wiki_page):(\d+):\d+|reading:(\d+):.+)$/s;
+
+/**
+ * Leave a short note on a due item for everyone in its course, replace the
+ * note that's there, or delete it. Anyone in the course may do any of these.
+ * Body: {"course_id", "key": the item's key, "note": "text" or null to delete}.
+ * Answers {"note": {note, by, at} or null}.
+ *
+ * Like setReading, the name comes from CourseWorks and the person must be in the course.
+ */
+async function itemNote(req: Request): Promise<Response> {
+  const token = tokenFrom(req);
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return refuse("The request wasn't readable.");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return refuse("The request wasn't readable.");
+  const { course_id: courseId, key } = body;
+  if (!Number.isInteger(courseId) || typeof key !== "string" || key.length > 2000) {
+    return refuse("Missing course or item.");
+  }
+  const m = key.match(NOTE_KEY);
+  if (!m || Number(m[1] ?? m[2]) !== courseId) return refuse("Notes can't be added to this item.");
+
+  let note: string | null = null;
+  if (body.note !== null) {
+    if (typeof body.note !== "string") return refuse("The note wasn't readable.");
+    note = body.note.replace(/\s+/g, " ").trim(); // one line, no stray spacing
+    if (!note) return refuse("The note is empty.");
+    if ([...note].length > NOTE_MAX) return refuse(`Notes can be at most ${NOTE_MAX} characters.`);
+  }
+
+  const cv = new CanvasClient(token);
+  let me, course;
+  try {
+    [me, course] = await Promise.all([cv.getAll("/users/self/profile"), cv.safe(`/courses/${courseId}`)]);
+  } catch (e) {
+    if (e instanceof CanvasError) {
+      if (e.status === 401) throw new NeedToken(BAD_TOKEN);
+      return refuse(`Couldn't check with CourseWorks (${e.message}).`, 502);
+    }
+    return refuse(`Couldn't reach CourseWorks (${errorName(e)}).`, 502);
+  }
+  if (!course) return refuse("You don't seem to be in this course.", 403);
+
+  const name = me.name || me.short_name || "A classmate";
+  return json({ note: await setNote(courseId, key, note, me.id ?? null, name) });
 }
 
 // ─── Previews ────────────────────────────────────────────────────────────────
@@ -322,6 +391,7 @@ async function pagePreview(req: Request, url: URL): Promise<Response> {
 const ROUTES: Record<string, (req: Request, url: URL) => Promise<Response>> = {
   "GET data": apiData,
   "POST reading-deadline": setReading,
+  "POST note": itemNote,
   "GET file-preview": filePreview,
   "GET file-content": fileContent,
   "GET page": pagePreview,

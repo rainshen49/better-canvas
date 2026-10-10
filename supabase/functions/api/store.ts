@@ -8,6 +8,10 @@
 // A reading is in at most one of the two tables: giving it a date unmarks
 // it, and marking it removes its date. Each switch happens in one transaction.
 //
+// `item_notes` holds the short note a classmate left on a due item (an assignment,
+// quiz, discussion, page or reading): one note per item, which anyone in the
+// course can replace or delete.
+//
 // `user_logins` is for analytics only: the last time each person opened the
 // app, by name (nothing else about them is kept). The page never reads it.
 //
@@ -29,6 +33,11 @@ export interface Discussed {
   by: string;
   at: string;
   title: string;
+}
+export interface Note {
+  note: string;
+  by: string; // who wrote (or last changed) it
+  at: string; // when (UTC, ISO 8601)
 }
 
 // The same statements work in Postgres and SQLite. Tables are also created by
@@ -54,6 +63,15 @@ export const SCHEMA = [
      set_at      TEXT    NOT NULL,  -- when it was marked (UTC)
      PRIMARY KEY (course_id, url)
    )`,
+  `CREATE TABLE IF NOT EXISTS item_notes (
+     course_id   BIGINT  NOT NULL,
+     item_key    TEXT    NOT NULL,  -- the due item's key, e.g. assignment:123:456 (see due.ts)
+     note        TEXT    NOT NULL,
+     set_by_id   BIGINT,
+     set_by_name TEXT    NOT NULL,
+     set_at      TEXT    NOT NULL,  -- when it was written (UTC)
+     PRIMARY KEY (course_id, item_key)
+   )`,
   `CREATE TABLE IF NOT EXISTS user_logins (
      name          TEXT  PRIMARY KEY,  -- the person's CourseWorks name
      last_login_at TEXT  NOT NULL      -- when they last opened the app (UTC)
@@ -65,6 +83,7 @@ export const SCHEMA = [
 const POSTGRES_ONLY = [
   "ALTER TABLE deadlines ENABLE ROW LEVEL SECURITY",
   "ALTER TABLE discussed_readings ENABLE ROW LEVEL SECURITY",
+  "ALTER TABLE item_notes ENABLE ROW LEVEL SECURITY",
   "ALTER TABLE user_logins ENABLE ROW LEVEL SECURITY",
 ];
 
@@ -214,6 +233,39 @@ export async function setDiscussed(
     ],
   ]);
   return { by: userName, at: now, title };
+}
+
+/** {item key: {note, by, at}} for the notes in these courses. */
+export async function notesForCourses(courseIds: number[]): Promise<Record<string, Note>> {
+  if (!courseIds.length) return {};
+  const marks = courseIds.map(() => "?").join(",");
+  const rows = await (await database()).run([[`SELECT * FROM item_notes WHERE course_id IN (${marks})`, courseIds]]);
+  return Object.fromEntries(rows.map((r) => [r.item_key, { note: r.note, by: r.set_by_name, at: r.set_at }]));
+}
+
+/** Save an item's note, replacing any earlier one, or (when note is null) delete it. Returns the new value or null. */
+export async function setNote(
+  courseId: number,
+  itemKey: string,
+  note: string | null,
+  userId: number | null,
+  userName: string,
+): Promise<Note | null> {
+  const db = await database();
+  if (note === null) {
+    await db.run([["DELETE FROM item_notes WHERE course_id = ? AND item_key = ?", [courseId, itemKey]]]);
+    return null;
+  }
+  const now = nowUtc();
+  await db.run([[
+    `INSERT INTO item_notes (course_id, item_key, note, set_by_id, set_by_name, set_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (course_id, item_key) DO UPDATE SET
+       note = excluded.note, set_by_id = excluded.set_by_id,
+       set_by_name = excluded.set_by_name, set_at = excluded.set_at`,
+    [courseId, itemKey, note, userId, userName, now],
+  ]]);
+  return { note, by: userName, at: now };
 }
 
 /** Analytics: note that this person (by name only) just logged in. */

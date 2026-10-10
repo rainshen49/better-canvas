@@ -543,6 +543,83 @@ summary::marker {
   background: var(--card);
 }
 
+/* The note classmates leave on an item, under its details */
+.dnote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+}
+
+.dnote:empty {
+  display: none;
+}
+
+.inote {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.inote-text {
+  margin-right: 6px;
+}
+
+.inote-by,
+.note-count,
+.note-none {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.note-btns {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.note-form {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-input {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+
+.note-input:focus {
+  border-color: var(--acc);
+  outline: none;
+}
+
+.note-err {
+  flex: 1 1 100%;
+  color: var(--warn);
+  font-size: 12px;
+}
+
+.note-err:empty {
+  display: none;
+}
+
+body.showing-saved .dnote .rdue-btn {
+  opacity: 0.55;
+  cursor: progress;
+}
+
 .dbody h4 {
   margin: 16px 0 6px;
   color: var(--mute);
