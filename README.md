@@ -5,7 +5,7 @@ A simpler view of Columbia CourseWorks. CourseWorks spreads a class across modul
 - **What's due soon** across all your classes, with each assignment's details and the course files that go with it.
 - **Every class's slides, readings and recordings** in one place, searchable and previewable without leaving the page.
 - **Reading due dates, shared with classmates.** Professors rarely put readings on the calendar, so anyone in a course can date a reading (or mark it as not needing one) and everyone else sees it.
-- **Short notes, shared with classmates.** Open any assignment, quiz, discussion, page or reading on the Due soon tab and add a note of up to 149 characters (a tip, a warning, which pages matter). A small 💬 beside the title shows which items have one. Everyone in the class sees the note when they open that item, and anyone can edit or delete it. The iPhone app doesn't show notes yet.
+- **Short notes, shared with classmates.** Open any assignment, quiz, discussion, page or reading on the Due soon tab and add a note of up to 149 characters (a tip, a warning, which pages matter). A small 💬 beside the title shows which items have one. Everyone in the class sees the note when they open that item, and anyone can edit or delete it.
 
 Each person logs in with their own CourseWorks access token.
 
@@ -34,6 +34,7 @@ The `ios/` folder holds an iPhone version of the same page. It uses the same ser
 - **Due soon.** Everything due in the next three weeks, grouped by day. Items you've already submitted shrink to a single crossed-out line at the bottom of their day. Tap an item for its description, points, how to submit, open and close dates, attached files, and any course files that look related (for example, "HW2.pdf" for "Homework 2"). Below the list, **Readings without a due date** lists each class's readings that nobody has dated yet.
 - **Slides & readings.** Every class, with how many slides and readings it has. Tap a class to see its links, modules and files. Use the search box to search all classes at once, and the filter button to show only slides, readings, recordings or other. Orientation and career sites are tucked into an **Other sites** group.
 - **Previews.** Tapping a PDF, document, image, video or page opens it inside the app. Files that can't be previewed open in CourseWorks instead, and the download button on a file's row downloads it.
+- **Notes.** Open an item on the Due soon tab to read, add, edit or delete its short note, which appears right under the due date. A small speech bubble beside the title in the list shows which items have one.
 - **Reading due dates.** Under any reading, tap **+ Due date** and pick one of the next ten weekdays. Everyone in the class sees it, along with who added it. On the Due soon tab you can also hide a reading you don't need a date for (say, one covered in class), and bring it back later. Changes show up straight away and are undone if the server can't save them.
 
 **How loading works**

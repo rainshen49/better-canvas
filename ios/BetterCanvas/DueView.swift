@@ -158,9 +158,14 @@ struct AccountMenu: ToolbarContent {
     }
 }
 
+/// Items that can carry a note. Personal to-dos and peer reviews belong to one person.
+private let noteTypes: Set<String> = ["assignment", "quiz", "discussion_topic", "wiki_page", "reading"]
+
 struct DueRow: View {
     let item: DueItem
     @Environment(AppStore.self) private var store
+
+    private var hasNote: Bool { store.snapshot.notes?[item.key] != nil }
 
     var body: some View {
         if item.isSubmitted { submittedRow } else { openRow }
@@ -172,6 +177,7 @@ struct DueRow: View {
             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 .accessibilityLabel(item.graded ?? false ? "Graded" : "Submitted")
             Text(item.title).strikethrough(color: .secondary).foregroundStyle(.secondary).lineLimit(1)
+            if hasNote { NoteIndicator() }
             Spacer(minLength: 8)
             if let id = item.courseId, let course = item.course {
                 Text(course).font(.caption2).lineLimit(1)
@@ -191,7 +197,10 @@ struct DueRow: View {
             .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             .frame(width: 66, alignment: .leading).padding(.top, 3)
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(item.title)
+                    if hasNote { NoteIndicator() }
+                }
                 FlowLayout(spacing: 6) {
                     if let id = item.courseId {
                         CourseTag(name: item.course ?? "", hue: store.snapshot.hue(courseId: id))
@@ -207,6 +216,99 @@ struct DueRow: View {
     /// Assignments are the common case, so only other kinds get a label; points sit under the time.
     private var meta: String {
         item.isAssignment ? "" : itemTypeLabels[item.type] ?? item.type
+    }
+}
+
+/// A small speech bubble beside an item's title when classmates left a note on it.
+struct NoteIndicator: View {
+    var body: some View {
+        Image(systemName: "text.bubble").font(.caption).foregroundStyle(.secondary)
+            .accessibilityLabel("Has a note")
+    }
+}
+
+/// The note on one due item, shown right after its due date: read it, add one, or change or delete it.
+struct NoteSection: View {
+    static let maxLength = 149
+
+    let item: DueItem
+    @Environment(AppStore.self) private var store
+    @State private var editing = false
+    @State private var draft = ""
+
+    var body: some View {
+        let saving = store.savingNotes.contains(item.key)
+        VStack(alignment: .leading, spacing: 8) {
+            if let message = store.snapshot.notesError, store.snapshot.notes == nil {
+                Text("Couldn't load notes (\(message)).").font(.footnote).foregroundStyle(.secondary)
+            } else if let notes = store.snapshot.notes {
+                if editing { editor(saving: saving) } else if let note = notes[item.key] { shown(note) } else { addButton }
+            }
+            if let error = store.noteErrors[item.key] {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .font(.subheadline)
+        .disabled(saving)
+        .onChange(of: store.savingNotes.contains(item.key)) { wasSaving, isSaving in
+            // Back from the server: close the editor if it saved.
+            if wasSaving, !isSaving, store.noteErrors[item.key] == nil { editing = false }
+        }
+    }
+
+    private var addButton: some View {
+        Button { begin("") } label: { Label("Add note", systemImage: "plus.bubble") }
+    }
+
+    private func shown(_ note: ItemNote) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(note.note)
+            HStack(spacing: 14) {
+                Text("— \(note.by) · \(Dates.dateTime(note.at))").font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Button("Edit") { begin(note.note) }.buttonStyle(.borderless)
+                Button("Delete", role: .destructive) { store.saveNote(item, nil) }.buttonStyle(.borderless)
+            }
+            .font(.footnote)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func editor(saving: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField("A short note for your classmates", text: $draft, axis: .vertical)
+                .lineLimit(1...3)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.done)
+                .onChange(of: draft) { _, new in
+                    // Limit to 149 characters, counted the way the server counts them, with no line breaks.
+                    let clean = String(String.UnicodeScalarView(new.unicodeScalars.filter { $0 != "\n" }.prefix(Self.maxLength)))
+                    if clean != new { draft = clean }
+                }
+            HStack {
+                Text("\(draft.unicodeScalars.count)/\(Self.maxLength)").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") { editing = false; store.clearNoteError(item.key) }.buttonStyle(.borderless)
+                Button("Save") { save() }.buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func begin(_ text: String) {
+        draft = text
+        editing = true
+    }
+
+    private func save() {
+        let text = draft.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        if text.isEmpty {
+            // Saving nothing deletes the note, if there was one.
+            if store.snapshot.notes?[item.key] != nil { store.saveNote(item, nil) } else { editing = false }
+        } else {
+            store.saveNote(item, text)
+        }
     }
 }
 
@@ -236,6 +338,7 @@ struct DueDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header(item)
+                    if item.courseId != nil, noteTypes.contains(item.type) { NoteSection(item: item) }
                     detail(item)
                 }
                 .padding()

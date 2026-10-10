@@ -85,12 +85,21 @@ struct APIClient {
         return state
     }
 
+    /// POST /api/note. A nil note deletes it. The server answers {"note": … or null} or {"error"}.
+    func saveNote(courseId: Int, key: String, note: String?) async throws -> ItemNote? {
+        let body: [String: Any] = ["course_id": courseId, "key": key, "note": note ?? NSNull()]
+        let req = try request("/api/note", method: "POST", body: try JSONSerialization.data(withJSONObject: body))
+        let state = try JSONDecoder().decode(NoteState.self, from: try await send(req))
+        if let message = state.error { throw APIError(message: message, needToken: state.needToken ?? false) }
+        return state.note
+    }
+
     /// GET /api/data as lines of JSON, one update per line, as each piece is ready.
     func dataLines() -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let (bytes, response) = try await Self.session.bytes(for: try request("/api/data"))
+                    let (bytes, response) = try await Self.session.bytes(for: try request("/api/data", query: ["notes": "1"]))
                     let http = response as? HTTPURLResponse
                     let isStream = (http?.value(forHTTPHeaderField: "Content-Type") ?? "").contains("ndjson")
                     if !isStream {

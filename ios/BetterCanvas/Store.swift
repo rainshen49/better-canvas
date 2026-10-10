@@ -16,6 +16,9 @@ struct Snapshot {
     var due: [DueItem]?
     var dueError: String?
     var details: [String: DetailResult] = [:]
+    /// Item key → its note. Nil until the server has sent them (or if this saved copy predates notes).
+    var notes: [String: ItemNote]?
+    var notesError: String?
     var mats: [Int: CourseMaterials] = [:]
     var courseErrors: [Int: String] = [:]
     var got = 0
@@ -34,7 +37,7 @@ struct Snapshot {
             self.user = user
             self.days = days
             self.courses = courses
-            total = courses.count + 1 // the due list + one per course; due details are added later
+            total = courses.count + 2 // the due list, the notes + one per course; due details are added later
         case let .due(items):
             due = items
             total += items.filter { $0.hasDetail ?? false }.count
@@ -44,6 +47,12 @@ struct Snapshot {
             got += 1
         case let .dueError(message):
             dueError = message
+            got += 1
+        case let .notes(all):
+            notes = all
+            got += 1
+        case let .notesError(message):
+            notesError = message
             got += 1
         case let .course(course):
             mats[course.id] = course
@@ -55,6 +64,11 @@ struct Snapshot {
             finished = true
             generated = date
         }
+    }
+
+    /// Put an item's note (or, if nil, its absence) in place.
+    mutating func setNote(key: String, _ note: ItemNote?) {
+        notes?[key] = note
     }
 
     // MARK: Reading state (shared with everyone in the course)
@@ -174,6 +188,9 @@ final class AppStore {
     // Reading changes in progress, and the last error for each reading
     private(set) var savingReadings = Set<String>()
     private(set) var readingErrors: [String: String] = [:]
+    // Notes being saved, and the last error for each item's note
+    private(set) var savingNotes = Set<String>()
+    private(set) var noteErrors: [String: String] = [:]
 
     private var loadTask: Task<Void, Never>?
     private var generation = 0
@@ -216,6 +233,8 @@ final class AppStore {
         token = ""
         savingReadings = []
         readingErrors = [:]
+        savingNotes = []
+        noteErrors = [:]
         savedAt = nil
         Keychain.write("")
         Cache.clear()
@@ -395,6 +414,39 @@ final class AppStore {
             }
         }
     }
+
+    // MARK: Notes
+
+    /// Save an item's note for everyone in its course, or delete it (nil). Unlike due dates, the screen
+    /// changes once the server has answered.
+    func saveNote(_ item: DueItem, _ text: String?) {
+        guard let courseId = item.courseId else { return }
+        let key = item.key
+        guard !savingNotes.contains(key) else { return }
+        guard pending == nil else {
+            noteErrors[key] = "Still refreshing. Try again in a moment."
+            return
+        }
+        noteErrors[key] = nil
+        savingNotes.insert(key)
+        let client = self.client
+        let session = self.session
+        Task {
+            do {
+                let saved = try await client.saveNote(courseId: courseId, key: key, note: text)
+                guard session == self.session else { return }
+                savingNotes.remove(key)
+                snapshot.setNote(key: key, saved)
+            } catch {
+                guard session == self.session else { return }
+                savingNotes.remove(key)
+                if (error as? APIError)?.needToken == true { return logOut(message: error.localizedDescription) }
+                noteErrors[key] = "Not saved: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func clearNoteError(_ key: String) { noteErrors[key] = nil }
 
     // MARK: Previews
 

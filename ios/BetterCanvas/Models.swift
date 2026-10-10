@@ -214,6 +214,25 @@ struct ReadingState: Decodable {
     }
 }
 
+/// A short note a classmate left on a due item.
+struct ItemNote: Codable, Hashable {
+    let note: String
+    let by: String
+    let at: String
+}
+
+/// Result of POST /api/note: the item's new note, or none if it was deleted.
+struct NoteState: Decodable {
+    let note: ItemNote?
+    let error: String?
+    let needToken: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case note, error
+        case needToken = "need_token"
+    }
+}
+
 /// The server's error body: {"error": …, "need_token": true?}, plus the course id on a stream failure.
 struct ServerFailure: Decodable {
     let error: String?
@@ -250,6 +269,8 @@ enum StreamEvent {
     case due([DueItem])
     case dueError(String)
     case dueDetail(key: String, result: DetailResult)
+    case notes([String: ItemNote])
+    case notesError(String)
     case course(CourseMaterials)
     case courseError(id: Int?, message: String)
     case done(Date)
@@ -265,6 +286,7 @@ enum StreamEvent {
     private struct Start: Decodable { let user: String?; let days: Int; let courses: [CourseSummary] }
     private struct Due: Decodable { let due: [DueItem] }
     private struct Detail: Decodable { let key: String; let detail: DueDetail?; let error: String? }
+    private struct Notes: Decodable { let notes: [String: ItemNote] }
     private struct One: Decodable { let course: CourseMaterials }
     private struct Done: Decodable { let generated: String? }
 
@@ -284,6 +306,10 @@ enum StreamEvent {
             let d = try decoder.decode(Detail.self, from: data)
             if let detail = d.detail { return .dueDetail(key: d.key, result: .loaded(detail)) }
             return .dueDetail(key: d.key, result: .failed(d.error ?? "unknown error"))
+        case "notes":
+            return .notes(try decoder.decode(Notes.self, from: data).notes)
+        case "notes_error":
+            return .notesError(try decoder.decode(ServerFailure.self, from: data).error ?? "unknown error")
         case "course":
             return .course(try decoder.decode(One.self, from: data).course)
         case "course_error":
