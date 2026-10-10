@@ -22,7 +22,7 @@ To log in, create a token in CourseWorks (**Account → Settings → + New Acces
 ## How it's hosted
 
 - **GitHub Pages** serves the page (https://rainshen49.github.io/better-canvas/). Pushing changes to `static/` on `main` republishes it.
-- **Supabase** runs the server (an Edge Function called `api`) that talks to CourseWorks, and stores the shared reading due dates and notes. Deploy changes with `deno task deploy`.
+- **Supabase** runs the server (an Edge Function called `api`) that talks to CourseWorks, and stores the shared reading due dates and notes. The repository is connected to Supabase, so pushing changes to `main` deploys them automatically. To deploy by hand, run `deno task deploy`.
 - **Privacy:** the token stays in the person's browser and is only used by the server to talk to CourseWorks; it's never saved or logged. For usage stats, the server records each person's name and when they last opened the app.
 
 ## iPhone app
