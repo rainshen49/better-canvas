@@ -195,7 +195,7 @@ function dueItemHtml(item) {
         </div>
         <div class="rstat">${statusTag(item)}</div>
       </div></summary>
-      <div class="dbody"><div class="dmain"></div>${noteBoxHtml(item)}</div>
+      <div class="dbody"><div class="dtop"></div>${noteBoxHtml(item)}<div class="dmain"></div></div>
     </details>`;
 }
 
@@ -376,9 +376,10 @@ function fillDetail(key) {
   const openLink = externalLink(item.url, "Open in CourseWorks ↗");
 
   if (item.type === "reading") {
-    body.innerHTML = `
-      <div class="rdue-line">${readingDueBoxHtml(item.course_id, item.url, true)}</div>
-      ${readingLinkHtml(item)}`;
+    // The due date comes first, then the note (between them and the link).
+    body.closest(".dbody").querySelector(".dtop").innerHTML =
+      `<div class="rdue-line">${readingDueBoxHtml(item.course_id, item.url, true)}</div>`;
+    body.innerHTML = readingLinkHtml(item);
     return;
   }
   if (!detail) {

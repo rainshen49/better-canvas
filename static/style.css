@@ -549,15 +549,15 @@ summary::marker {
   opacity: 0.75;
 }
 
-/* The note classmates leave on an item, under its details */
+/* The note classmates leave on an item, at the top of its details (after a reading's due date) */
 .dnote {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  margin: 10px 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
   font-size: 13.5px;
 }
 
