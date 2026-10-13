@@ -1384,7 +1384,22 @@ $("#authform").onsubmit = (event) => {
   const token = $("#tokeninput").value.trim();
   if (!token) return;
   setToken(token);
+  // A page left open for more than a day gets its due dates and content reloaded.
+// It waits until the page is visible and nothing is being typed, so it never
+// redraws under the reader.
+let lastLoadStarted = Date.now();
+
+function reloadIfStale() {
+  if (document.hidden || !getToken()) return;
+  if (Date.now() - lastLoadStarted < MS_PER_DAY) return;
+  if (document.activeElement?.matches("input, textarea, select")) return;
   load();
+}
+
+document.addEventListener("visibilitychange", reloadIfStale);
+setInterval(reloadIfStale, 10 * 60 * 1000);
+
+load();
 };
 
 $("#signout").onclick = () => {
@@ -1654,6 +1669,7 @@ async function load() {
   currentRequest?.abort();
   const request = new AbortController();
   currentRequest = request;
+  lastLoadStarted = Date.now();
 
   showApp();
   clearView();
@@ -1772,5 +1788,20 @@ async function load() {
 
   if (!finished) failLoad("the response ended early. Reload the page to try again.");
 }
+
+// A page left open for more than a day gets its due dates and content reloaded.
+// It waits until the page is visible and nothing is being typed, so it never
+// redraws under the reader.
+let lastLoadStarted = Date.now();
+
+function reloadIfStale() {
+  if (document.hidden || !getToken()) return;
+  if (Date.now() - lastLoadStarted < MS_PER_DAY) return;
+  if (document.activeElement?.matches("input, textarea, select")) return;
+  load();
+}
+
+document.addEventListener("visibilitychange", reloadIfStale);
+setInterval(reloadIfStale, 10 * 60 * 1000);
 
 load();
