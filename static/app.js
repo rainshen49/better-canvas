@@ -307,25 +307,6 @@ function relatedFiles(item, excludeUrls) {
   );
 }
 
-/** Short facts (points, attempts, dates…) shown as small labels at the top of the panel. */
-function detailChips(detail) {
-  let attempts = null;
-  if (detail.attempts === -1) attempts = "Unlimited attempts";
-  else if (detail.attempts != null) {
-    attempts = `${detail.attempts} attempt${detail.attempts === 1 ? "" : "s"}`;
-  }
-
-  return [
-    detail.points != null && `${detail.points} pts`,
-    detail.submission?.length && `Submit: ${detail.submission.join(", ")}`,
-    attempts,
-    detail.questions && `${detail.questions} questions`,
-    detail.time_limit && `${detail.time_limit} min limit`,
-    detail.unlock_at && `Opens ${formatDateTime(detail.unlock_at)}`,
-    detail.lock_at && `Closes ${formatDateTime(detail.lock_at)}`,
-  ].filter(Boolean);
-}
-
 // A download arrow, drawn in the text color.
 const DOWNLOAD_ICON = `
   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor"
@@ -393,14 +374,12 @@ function fillDetail(key) {
     return;
   }
 
-  const chips = detailChips(detail);
   const attachedUrls = new Set(detail.files.map((file) => file.url));
   const related = relatedFiles(item, attachedUrls);
 
   const parts = [];
-  if (chips.length) {
-    parts.push(`<div class="chips">${chips.map((c) => `<span>${esc(c)}</span>`).join("")}</div>`);
-  }
+  const teams = DATA.mats[item.course_id]?.teams;
+  if (teams?.length) parts.push(teamLinesHtml(teams));
   // The server has already removed anything unsafe from this description.
   parts.push(
     detail.html ? `<div class="desc">${detail.html}</div>` : `<p class="sub">No description provided.</p>`,
@@ -634,6 +613,56 @@ function quickLinksHtml(links) {
   return `<div class="quick">${buttons.join("")}</div>`;
 }
 
+const firstName = (member) => member.name.trim().split(/\s+/)[0];
+
+const teamEmails = (team) => [...new Set(team.members.map((m) => m.email).filter(Boolean))];
+
+const copyButton = (emails) =>
+  `<button type="button" class="copy-emails" data-emails="${esc(emails.join(", "))}">Copy emails</button>`;
+
+/** One compact line per team (name, members' first names, a copy button), for the Due soon panels. */
+function teamLinesHtml(teams) {
+  const lines = teams.map((team) => {
+    const emails = teamEmails(team);
+    const list = esc(team.members.map(firstName).join(", "));
+    return `<div class="teamline"><b>👥 ${esc(team.name)}</b><span class="emails" title="${list}">${list}</span>${emails.length ? copyButton(emails) : ""}</div>`;
+  });
+  return `<div class="teamlines">${lines.join("")}</div>`;
+}
+
+/** The person's teams in a course: each lists its members, with one click to copy their emails. */
+function teamsHtml(teams) {
+  return teams.map((team) => {
+    const emails = teamEmails(team);
+    const members = team.members.map((m) =>
+      `<li>${esc(m.name)}${m.email ? ` <a href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : ""}</li>`
+    ).join("");
+    const copy = emails.length
+      ? copyButton(emails)
+      : `<span class="sub">No emails shared by CourseWorks</span>`;
+    return `
+      <details class="team">
+        <summary>👥 ${esc(team.name)} <span class="sub">· ${team.members.length} members</span></summary>
+        <ul>${members}</ul>
+        ${copy}
+      </details>`;
+  }).join("");
+}
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest(".copy-emails");
+  if (!button) return;
+  event.preventDefault();
+  const label = button.dataset.label ??= button.textContent;
+  try {
+    await navigator.clipboard.writeText(button.dataset.emails);
+    button.textContent = "Copied ✓";
+  } catch {
+    button.textContent = "Couldn't copy";
+  }
+  setTimeout(() => (button.textContent = label), 1800);
+});
+
 function courseTitleHtml(course) {
   const code = course.code ? ` <span class="code">${esc(course.code)}</span>` : "";
   return esc(course.name) + code;
@@ -657,6 +686,7 @@ function courseCardHtml(course, open) {
 
   let body = course.modules.map((module) => moduleHtml(module, course.id)).join("");
   if (course.files.length) body += looseFilesHtml(course);
+  if (course.teams?.length) body = teamsHtml(course.teams) + body;
   if (course.quick?.length) body = quickLinksHtml(course.quick) + body;
   if (!body) {
     body = `

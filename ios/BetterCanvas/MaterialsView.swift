@@ -160,6 +160,25 @@ struct CourseView: View {
                         }
                     }
                 }
+                if !course.teams.isEmpty {
+                    Section("Your teams") {
+                        ForEach(course.teams) { team in
+                            DisclosureGroup {
+                                ForEach(team.members, id: \.self) { member in
+                                    VStack(alignment: .leading) {
+                                        Text(member.name)
+                                        if let email = member.email {
+                                            Text(email).font(.footnote).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                                CopyEmailsButton(emails: team.emails, title: "Copy emails")
+                            } label: {
+                                Label("\(team.name) · \(team.members.count)", systemImage: "person.2")
+                            }
+                        }
+                    }
+                }
                 ForEach(course.modules.indexed) { module in
                     moduleSection(module.value, course)
                 }

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "better-canvas",
+      "runtimeExecutable": "deno",
+      "runtimeArgs": ["run", "--allow-net", "--allow-env", "--allow-read", "--allow-write", "--allow-sys", "--allow-run", "dev.ts"],
+      "port": 8765
+    }
+  ]
+}

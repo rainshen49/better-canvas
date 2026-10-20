@@ -394,9 +394,8 @@ struct DueDetailView: View {
 
     @ViewBuilder
     private func loaded(_ item: DueItem, _ detail: DueDetail) -> some View {
-        let chips = chips(detail)
-        if !chips.isEmpty {
-            FlowLayout { ForEach(chips, id: \.self) { Tag(text: $0) } }
+        if let teams = store.snapshot.mats[item.courseId ?? -1]?.teams, !teams.isEmpty {
+            TeamLines(teams: teams)
         }
         if let html = detail.html, !html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             InlineHTML(html: html)
@@ -435,17 +434,5 @@ struct DueDetailView: View {
                 Link("Open reading ↗", destination: url)
             }
         }
-    }
-
-    private func chips(_ d: DueDetail) -> [String] {
-        var out: [String] = []
-        if let p = d.points { out.append("\(p.formatted()) pts") }
-        if let s = d.submission, !s.isEmpty { out.append("Submit: \(s.joined(separator: ", "))") }
-        if let a = d.attempts { out.append(a == -1 ? "Unlimited attempts" : "\(Int(a)) attempt\(a == 1 ? "" : "s")") }
-        if let q = d.questions { out.append("\(Int(q)) questions") }
-        if let t = d.timeLimit { out.append("\(Int(t)) min limit") }
-        if let u = d.unlockAt { out.append("Opens \(Dates.dateTime(u))") }
-        if let l = d.lockAt { out.append("Closes \(Dates.dateTime(l))") }
-        return out
     }
 }

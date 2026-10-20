@@ -648,21 +648,6 @@ body.showing-saved .dnote .rdue-btn {
   color: var(--mute);
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.chips span {
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 99px;
-  background: var(--bg);
-  font-size: 12.5px;
-}
-
 /* Assignment description, as the instructor wrote it in CourseWorks */
 .desc {
   font-size: 14.5px;
@@ -1275,4 +1260,66 @@ details.udiscussed ul.ulist li {
   nav {
     margin-left: 0;
   }
+}
+
+/* The person's teams in a course, with member emails */
+.team {
+  margin: 2px 0 6px;
+  font-size: 13px;
+}
+
+.team summary {
+  cursor: pointer;
+}
+
+.team ul {
+  margin: 4px 0 6px;
+  padding-left: 20px;
+}
+
+.team li a {
+  color: var(--mute);
+}
+
+.copy-emails {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.copy-emails:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+/* Compact team emails at the top of an expanded Due soon item */
+.teamlines {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+}
+
+.teamline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.teamline .emails {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mute);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teamline .copy-emails {
+  flex: none;
+  padding: 1px 9px;
 }

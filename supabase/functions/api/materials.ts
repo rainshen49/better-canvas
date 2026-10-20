@@ -96,6 +96,27 @@ export function parseSyllabus(body: string | null | undefined) {
   return sections;
 }
 
+// Who is on the person's teams, per request: every course asks for the person's groups, so ask once.
+const groupLists = new WeakMap<CanvasClient, Promise<any[]>>();
+
+/**
+ * The student teams (CourseWorks "groups") the person is on in one course, with
+ * each team's members and their emails. Empty when the course has no teams or
+ * CourseWorks hides them. A member's email is left out when CourseWorks doesn't share it.
+ */
+async function fetchTeams(cv: CanvasClient, courseId: number) {
+  if (!groupLists.has(cv)) groupLists.set(cv, cv.safe("/users/self/groups").then((g) => g ?? []));
+  const groups = (await groupLists.get(cv)!).filter((g) => g.context_type === "Course" && g.course_id === courseId);
+  return await Promise.all(groups.map(async (g) => {
+    const users: any[] = (await cv.safe(`/groups/${g.id}/users`, { "include[]": ["email"] })) ?? [];
+    const members = users.map((u) => ({
+      name: u.name ?? u.short_name ?? "",
+      email: u.email || (/@/.test(u.login_id ?? "") ? u.login_id : null),
+    })).sort((a, b) => a.name.localeCompare(b.name));
+    return { id: g.id, name: g.name ?? "Team", members };
+  }));
+}
+
 /** Everything the "Slides & readings" tab shows for one course, plus its reading due dates. */
 export async function fetchMaterials(cv: CanvasClient, course: any) {
   const cid = course.id;
@@ -104,7 +125,7 @@ export async function fetchMaterials(cv: CanvasClient, course: any) {
 
   // Ask CourseWorks for everything at once rather than one after another.
   // Hidden or missing parts come back as null.
-  const [modulesRaw, info, tabsRaw, files, folderList, deadlines, discussed] = await Promise.all([
+  const [modulesRaw, info, tabsRaw, files, folderList, deadlines, discussed, teams] = await Promise.all([
     cv.safe(`/courses/${cid}/modules`, { "include[]": ["items"] }),
     cv.safe(`/courses/${cid}`, { "include[]": ["syllabus_body"] }),
     cv.safe(`/courses/${cid}/tabs`),
@@ -112,6 +133,7 @@ export async function fetchMaterials(cv: CanvasClient, course: any) {
     cv.safe(`/courses/${cid}/folders`),
     deadlinesForCourse(cid),
     discussedForCourse(cid),
+    fetchTeams(cv, cid),
   ]);
   const modules: any[] = (modulesRaw ?? []).filter((m: any) => !SKIP_MODULE_RE.test(m.name ?? ""));
   // CourseWorks leaves out the item list for big modules, so fetch those separately (in parallel too)
@@ -212,6 +234,7 @@ export async function fetchMaterials(cv: CanvasClient, course: any) {
     files_accessible: files !== null,
     deadlines,
     discussed,
+    teams,
   };
 }
 

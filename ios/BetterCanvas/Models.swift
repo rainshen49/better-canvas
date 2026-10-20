@@ -63,21 +63,7 @@ struct AttachedFile: Codable, Hashable {
 struct DueDetail: Codable, Hashable {
     let html: String?
     let files: [AttachedFile]
-    let points: Double?
-    let submission: [String]?
-    let attempts: Double?
-    let timeLimit: Double?
-    let questions: Double?
-    let unlockAt: String?
-    let lockAt: String?
     let url: String?
-
-    enum CodingKeys: String, CodingKey {
-        case html, files, points, submission, attempts, questions, url
-        case timeLimit = "time_limit"
-        case unlockAt = "unlock_at"
-        case lockAt = "lock_at"
-    }
 }
 
 enum DetailResult {
@@ -145,6 +131,26 @@ struct QuickLink: Codable, Hashable {
     let url: String
 }
 
+struct TeamMember: Codable, Hashable {
+    let name: String
+    let email: String?
+
+    var firstName: String { name.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? name }
+}
+
+/// A student team (CourseWorks group) the person is on in a course.
+struct Team: Codable, Hashable, Identifiable {
+    let id: Int
+    let name: String
+    let members: [TeamMember]
+
+    /// Member emails without repeats, in member order.
+    var emails: [String] {
+        var seen = Set<String>()
+        return members.compactMap(\.email).filter { seen.insert($0).inserted }
+    }
+}
+
 struct Deadline: Codable, Hashable {
     var date: String // YYYY-MM-DD
     var by: String
@@ -169,11 +175,12 @@ struct CourseMaterials: Decodable {
     let files: [Entry]
     var deadlines: [String: Deadline]
     var discussed: [String: Discussed]
+    let teams: [Team]
     /// Every file and link, with the module or folder it sits in. Built once, when the course is decoded.
     let entries: [Material]
 
     enum CodingKeys: String, CodingKey {
-        case id, name, code, url, modules, quick, files, deadlines, discussed
+        case id, name, code, url, modules, quick, files, deadlines, discussed, teams
         case isClass = "is_class"
     }
 
@@ -189,6 +196,7 @@ struct CourseMaterials: Decodable {
         files = try c.decode([Entry].self, forKey: .files)
         deadlines = try c.decode([String: Deadline].self, forKey: .deadlines)
         discussed = try c.decode([String: Discussed].self, forKey: .discussed)
+        teams = try c.decodeIfPresent([Team].self, forKey: .teams) ?? []
         entries = modules.flatMap { module in
             module.items.filter { !$0.isHeader }.map { Material(entry: $0, ctx: module.name) }
         } + files.map { Material(entry: $0, ctx: $0.folder) }

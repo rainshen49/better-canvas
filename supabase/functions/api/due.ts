@@ -144,17 +144,6 @@ export async function fetchDue(cv: CanvasClient, courses: any[]) {
 // ─── Details of one assignment / quiz / discussion / page ────────────────────
 
 const FILE_LINK_RE = /<a\b([^>]*?)href="([^"]*?\/files\/(\d+)[^"]*)"([^>]*)>([\s\S]*?)<\/a>/gi;
-const SUBMISSION_LABELS: Record<string, string> = {
-  online_upload: "File upload",
-  online_text_entry: "Text entry",
-  online_url: "Website URL",
-  media_recording: "Media recording",
-  online_quiz: "Quiz",
-  discussion_topic: "Discussion post",
-  external_tool: "External tool",
-  on_paper: "On paper",
-  none: "No submission",
-};
 
 /**
  * Turn any link to a CourseWorks file into a direct download link (keeping the
@@ -201,17 +190,9 @@ export async function fetchDetail(cv: CanvasClient, item: any) {
     f.preview = previewKind(f.filename || f.name, f.mime);
   }));
 
-  const submission: string[] = d.submission_types ?? [];
   return {
     html: sanitize(raw),
     files: unique,
-    points: d.points_possible ?? null,
-    submission: submission.filter((x) => x !== "none").map((x) => SUBMISSION_LABELS[x] ?? x.replaceAll("_", " ")),
-    attempts: d.allowed_attempts ?? null,
-    time_limit: d.time_limit ?? null,
-    questions: d.question_count ?? null,
-    unlock_at: d.unlock_at ?? null,
-    lock_at: d.lock_at ?? null,
     url: d.html_url || item.url,
   };
 }

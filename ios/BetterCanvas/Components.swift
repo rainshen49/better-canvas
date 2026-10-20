@@ -271,3 +271,48 @@ struct WebPage: UIViewRepresentable {
 
     func updateUIView(_ view: WKWebView, context: Context) {}
 }
+
+/// Copies a list of emails to the clipboard, comma-separated, and says so for a moment.
+struct CopyEmailsButton: View {
+    let emails: [String]
+    var title = "Copy emails"
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            UIPasteboard.general.string = emails.joined(separator: ", ")
+            copied = true
+            Task { try? await Task.sleep(for: .seconds(1.8)); copied = false }
+        } label: {
+            // Both labels are laid out so the button doesn't change width when it flips.
+            ZStack {
+                Text("Copied ✓").opacity(copied ? 1 : 0)
+                Text(title).opacity(copied ? 0 : 1)
+            }
+            .fixedSize()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(emails.isEmpty)
+    }
+}
+
+/// One compact line per team: its name, its members' first names and a copy button.
+struct TeamLines: View {
+    let teams: [Team]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(teams) { team in
+                HStack(spacing: 8) {
+                    Text("👥 \(team.name)").font(.footnote.weight(.semibold)).lineLimit(1)
+                    Text(team.members.map(\.firstName).joined(separator: ", "))
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !team.emails.isEmpty { CopyEmailsButton(emails: team.emails) }
+                }
+            }
+        }
+    }
+}
