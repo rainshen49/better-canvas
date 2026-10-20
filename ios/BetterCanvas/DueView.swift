@@ -229,9 +229,9 @@ struct NoteSection: View {
     static let maxLength = 149
 
     let item: DueItem
+    @Binding var editing: Bool
+    @Binding var draft: String
     @Environment(AppStore.self) private var store
-    @State private var editing = false
-    @State private var draft = ""
 
     var body: some View {
         let saving = store.savingNotes.contains(item.key)
@@ -239,7 +239,7 @@ struct NoteSection: View {
             if let message = store.snapshot.notesError, store.snapshot.notes == nil {
                 Text("Couldn't load notes (\(message)).").font(.footnote).foregroundStyle(.secondary)
             } else if let notes = store.snapshot.notes {
-                if editing { editor(saving: saving) } else if let note = notes[item.key] { shown(note) } else { addButton }
+                if editing { editor(saving: saving) } else if let note = notes[item.key] { shown(note) }
             }
             if let error = store.noteErrors[item.key] {
                 Text(error).font(.caption).foregroundStyle(.red)
@@ -251,10 +251,6 @@ struct NoteSection: View {
             // Back from the server: close the editor if it saved.
             if wasSaving, !isSaving, store.noteErrors[item.key] == nil { editing = false }
         }
-    }
-
-    private var addButton: some View {
-        Button { begin("") } label: { Label("Add note", systemImage: "plus.bubble") }
     }
 
     private func shown(_ note: ItemNote) -> some View {
@@ -328,6 +324,8 @@ struct StatusTag: View {
 struct DueDetailView: View {
     let key: String
     @Environment(AppStore.self) private var store
+    @State private var editingNote = false
+    @State private var noteDraft = ""
 
     var body: some View {
         let snap = store.snapshot
@@ -335,7 +333,7 @@ struct DueDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header(item)
-                    if item.courseId != nil, noteTypes.contains(item.type) { NoteSection(item: item) }
+                    if showsNoteSection(item) { NoteSection(item: item, editing: $editingNote, draft: $noteDraft) }
                     detail(item)
                 }
                 .padding()
@@ -364,17 +362,37 @@ struct DueDetailView: View {
         }
     }
 
+    /// The note's own section appears only when there's a note to read, an editor open, or a problem to report.
+    private func showsNoteSection(_ item: DueItem) -> Bool {
+        guard item.courseId != nil, noteTypes.contains(item.type) else { return false }
+        return editingNote || store.snapshot.notes?[item.key] != nil
+            || (store.snapshot.notes == nil && store.snapshot.notesError != nil)
+    }
+
+    /// The last line of an item: its CourseWorks link, with "Add note" beside it while it has no note.
+    private func footer(_ item: DueItem, link: URL?) -> some View {
+        HStack(spacing: 16) {
+            CourseWorksLink(url: link)
+            if item.courseId != nil, noteTypes.contains(item.type), !editingNote,
+               let notes = store.snapshot.notes, notes[item.key] == nil {
+                Button { noteDraft = ""; editingNote = true } label: { Label("Add note", systemImage: "plus.bubble") }
+                    .buttonStyle(.borderless).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     @ViewBuilder
     private func detail(_ item: DueItem) -> some View {
         let openLink = item.url.flatMap(URL.init(string:))
         if item.isReading, let courseId = item.courseId, let url = item.url {
             ReadingDateControl(courseId: courseId, url: url, canHide: true)
             readingLink(item, courseId: courseId)
+            footer(item, link: nil)
         } else if let result = store.snapshot.details[item.key] {
             switch result {
             case let .failed(message):
                 Text("Couldn't load details (\(message)).").foregroundStyle(.secondary)
-                CourseWorksLink(url: openLink)
+                footer(item, link: openLink)
             case let .loaded(detail):
                 loaded(item, detail)
             }
@@ -382,10 +400,10 @@ struct DueDetailView: View {
             HStack { ProgressView(); Text("Loading details…").foregroundStyle(.secondary) }
         } else if item.hasDetail ?? false {
             Text("Couldn't load details.").foregroundStyle(.secondary)
-            CourseWorksLink(url: openLink)
+            footer(item, link: openLink)
         } else {
             Text("No further details.").foregroundStyle(.secondary)
-            CourseWorksLink(url: openLink)
+            footer(item, link: openLink)
         }
     }
 
@@ -418,7 +436,7 @@ struct DueDetailView: View {
         } else {
             HStack { ProgressView(); Text("Looking for related course files…").font(.footnote).foregroundStyle(.secondary) }
         }
-        CourseWorksLink(url: (detail.url ?? item.url).flatMap(URL.init(string:)))
+        footer(item, link: (detail.url ?? item.url).flatMap(URL.init(string:)))
     }
 
     private func readingLink(_ item: DueItem, courseId: Int) -> some View {

@@ -359,7 +359,8 @@ function fillDetail(key) {
     // The due date comes first, then the note (between them and the link).
     body.closest(".dbody").querySelector(".dtop").innerHTML =
       `<div class="rdue-line">${readingDueBoxHtml(item.course_id, item.url, true)}</div>`;
-    body.innerHTML = readingLinkHtml(item);
+    body.innerHTML = footHtml(item, readingLinkHtml(item));
+    syncAddButtons();
     return;
   }
   if (!detail) {
@@ -391,9 +392,10 @@ function fillDetail(key) {
   } else if (related.length) {
     parts.push(fileListHtml("Related course files", related.map((entry) => relatedFileHtml(entry, item.course_id))));
   }
-  parts.push(externalLink(detail.url, "Open in CourseWorks ↗", "openlink"));
+  parts.push(footHtml(item, externalLink(detail.url, "Open in CourseWorks ↗", "openlink")));
 
   body.innerHTML = parts.join("");
+  syncAddButtons();
 }
 
 /**
@@ -441,9 +443,7 @@ function noteInnerHtml(key) {
   if (DATA.notes === false) return `<span class="note-none">Couldn't load notes.</span>`;
   if (!DATA.notes) return ""; // still on its way
   const note = DATA.notes[key];
-  if (!note) {
-    return `<button class="rdue-btn" data-act="note-edit">+ Add note</button>${errorSlot}`;
-  }
+  if (!note) return ""; // "+ Add note" sits at the end of the item (see footHtml)
   return `
     <div class="inote">
       <span class="inote-text">${esc(note.note)}</span>
@@ -459,6 +459,24 @@ function noteInnerHtml(key) {
 function redrawNote(box) {
   box.innerHTML = noteInnerHtml(box.dataset.key);
   updateNoteIndicators();
+  syncAddButtons();
+}
+
+/** The last line of an expanded item: its link, and "+ Add note" when there's no note yet. */
+function footHtml(item, linkHtml) {
+  const add = NOTE_TYPES.has(item.type)
+    ? `<button class="rdue-btn quiet dadd" data-act="note-add" data-key="${esc(item.key)}" hidden>+ Add note</button>`
+    : "";
+  return `<div class="dfoot">${linkHtml}${add}</div>`;
+}
+
+/** Show each "+ Add note" only while its item has no note and no editor open. */
+function syncAddButtons() {
+  for (const button of $$(".dadd")) {
+    const box = button.closest("details.ditem").querySelector(".dnote");
+    const key = button.dataset.key;
+    button.hidden = !DATA.notes || Boolean(DATA.notes[key]) || !box || Boolean(box.querySelector(".note-input"));
+  }
 }
 
 /** Redraw every note box, e.g. when the notes arrive. Editors being typed in are left alone. */
@@ -467,6 +485,7 @@ function redrawNotes() {
     if (!box.querySelector(".note-input")) redrawNote(box);
   }
   updateNoteIndicators();
+  syncAddButtons();
 }
 
 function openNoteEditor(box) {
@@ -487,6 +506,7 @@ function openNoteEditor(box) {
   update();
   input.focus();
   input.setSelectionRange(input.value.length, input.value.length);
+  syncAddButtons();
 }
 
 /** Save a note (text), or delete it (null). The box shows the result once the server has answered. */
@@ -530,6 +550,10 @@ async function saveNote(box, note) {
 
 $("#due").addEventListener("click", (event) => {
   const button = event.target.closest("[data-act^='note-']");
+  if (button?.dataset.act === "note-add") {
+    openNoteEditor(button.closest("details.ditem").querySelector(".dnote"));
+    return;
+  }
   const box = button?.closest(".dnote");
   if (!box || button.disabled) return;
   const action = button.dataset.act;

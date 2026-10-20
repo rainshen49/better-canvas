@@ -1323,3 +1323,30 @@ details.udiscussed ul.ulist li {
   flex: none;
   padding: 1px 9px;
 }
+
+/* "+ Add note": plain small text until hovered, so it doesn't compete with the item's details */
+.rdue-btn.quiet {
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  font-size: 12.5px;
+  opacity: 0.8;
+}
+
+.rdue-btn.quiet:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* Last line of an expanded item: the CourseWorks link, with "+ Add note" beside it */
+.dfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-top: 14px;
+}
+
+.dfoot .openlink {
+  margin-top: 0;
+}
