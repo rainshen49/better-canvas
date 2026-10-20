@@ -91,7 +91,7 @@ struct Snapshot {
         if let deadline, deadline.date >= Dates.dayFromToday(0), deadline.date <= Dates.dayFromToday(days) {
             items.append(DueItem(
                 title: deadline.title ?? "", type: "reading", due: deadline.date + "T00:00:00", dateOnly: true,
-                course: courses.first { $0.id == courseId }?.name ?? "", courseId: courseId, url: url, points: nil,
+                course: courses.first { $0.id == courseId }?.name ?? "", courseId: courseId, url: url,
                 submitted: false, graded: false, missing: false, key: key, hasDetail: false,
                 addedBy: deadline.by, addedAt: deadline.at))
         }

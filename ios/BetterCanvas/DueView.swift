@@ -190,12 +190,9 @@ struct DueRow: View {
 
     private var openRow: some View {
         HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.isDateOnly ? "All day" : Dates.time(item.dueDate))
-                if !item.isAssignment, let points = item.points { Text("\(points.formatted()) pts") }
-            }
-            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            .frame(width: 66, alignment: .leading).padding(.top, 3)
+            Text(item.isDateOnly ? "All day" : Dates.time(item.dueDate))
+                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                .frame(width: 66, alignment: .leading).padding(.top, 3)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(item.title)
@@ -213,7 +210,7 @@ struct DueRow: View {
         }
     }
 
-    /// Assignments are the common case, so only other kinds get a label; points sit under the time.
+    /// Assignments are the common case, so only other kinds get a label.
     private var meta: String {
         item.isAssignment ? "" : itemTypeLabels[item.type] ?? item.type
     }

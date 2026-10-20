@@ -181,7 +181,6 @@ function statusTag(item) {
 /** One row in the due list. Clicking it opens a panel that fillDetail() fills in. */
 function dueItemHtml(item) {
   const typeLabel = ITEM_TYPE_LABELS[item.type] || esc(item.type);
-  const points = item.points != null ? ` · ${item.points} pts` : "";
   // Who added a reading's date is shown only when the row is expanded, when
   // hovering over the date (see fillDetail). Readings only have a day, not a time.
   const time = item.date_only ? "All day" : formatTime(new Date(item.due));
@@ -191,7 +190,7 @@ function dueItemHtml(item) {
         <div class="time">${time}</div>
         <div>
           <span class="dtitle">${esc(item.title)}</span>${noteIndicatorHtml(item.key)}
-          <div class="meta"><span class="tag t-course cc" ${courseColor(item.course_id)}>${esc(item.course)}</span> ${typeLabel}${points}</div>
+          <div class="meta"><span class="tag t-course cc" ${courseColor(item.course_id)}>${esc(item.course)}</span> ${typeLabel}</div>
         </div>
         <div class="rstat">${statusTag(item)}</div>
       </div></summary>
@@ -1163,7 +1162,6 @@ function updateDueListReading(courseId, url, deadline) {
       course: course.name || "",
       course_id: courseId,
       url,
-      points: null,
       submitted: false,
       key,
       has_detail: false,

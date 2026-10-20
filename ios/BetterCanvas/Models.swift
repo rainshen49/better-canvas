@@ -26,7 +26,6 @@ struct DueItem: Codable, Identifiable, Hashable {
     var course: String?
     var courseId: Int?
     var url: String?
-    var points: Double?
     var submitted: Bool?
     var graded: Bool?
     var missing: Bool?
@@ -43,7 +42,7 @@ struct DueItem: Codable, Identifiable, Hashable {
     var dueDate: Date { Dates.parse(due) ?? .distantFuture }
 
     enum CodingKeys: String, CodingKey {
-        case title, type, due, course, url, points, submitted, graded, missing, key
+        case title, type, due, course, url, submitted, graded, missing, key
         case dateOnly = "date_only"
         case courseId = "course_id"
         case hasDetail = "has_detail"
