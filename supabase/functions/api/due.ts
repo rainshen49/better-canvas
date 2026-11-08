@@ -67,7 +67,8 @@ export async function fetchDue(cv: CanvasClient, courses: any[]) {
         course: names.get(cid) || p.context_name || "",
         course_id: cid,
         url: absUrl(p.html_url),
-        submitted: Boolean(subs.submitted),
+        // Ungraded surveys report no submissions; Canvas marks them complete in the planner instead.
+        submitted: Boolean(subs.submitted) || Boolean(p.planner_override?.marked_complete),
         graded: Boolean(subs.graded),
         missing: Boolean(subs.missing),
         pid: p.plannable_id ?? null,
